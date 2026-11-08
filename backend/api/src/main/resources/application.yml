@@ -35,15 +35,37 @@ spring:
 server:
   port: ${SENYAP_API_PORT:8180}
   shutdown: graceful
+  # Di belakang load balancer: `native` (X-Forwarded-For dari LB tepercaya) supaya rate limit per IP benar.
+  forward-headers-strategy: ${SENYAP_FORWARD_HEADERS:none}
   error:
     whitelabel:
       enabled: false
 
 management:
+  # Observability (Fase 5). Metrik: /actuator/prometheus (di k8s lewat port management terpisah,
+  # MANAGEMENT_SERVER_PORT, tidak lewat ingress publik). Trace: OTLP ke collector bila SENYAP_OTLP_ENABLED=true.
+  tracing:
+    sampling:
+      probability: ${SENYAP_TRACE_SAMPLING:1.0}
+    export:
+      otlp:
+        enabled: ${SENYAP_OTLP_ENABLED:false}
+  opentelemetry:
+    tracing:
+      export:
+        otlp:
+          endpoint: ${SENYAP_OTLP_TRACES_ENDPOINT:http://localhost:4318/v1/traces}
+  otlp:
+    metrics:
+      export:
+        enabled: false
+  metrics:
+    tags:
+      application: ${spring.application.name}
   endpoints:
     web:
       exposure:
-        include: health,info
+        include: health,info,prometheus
   endpoint:
     health:
       show-details: always

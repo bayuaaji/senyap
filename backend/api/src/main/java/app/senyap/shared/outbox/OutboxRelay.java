@@ -1,10 +1,13 @@
 package app.senyap.shared.outbox;
 
 import app.senyap.shared.db.ModuleDatabase;
+import app.senyap.shared.observability.Traces;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.springframework.kafka.core.KafkaTemplate;
 
 /**
@@ -26,26 +29,31 @@ public final class OutboxRelay {
         this.batchSize = batchSize;
     }
 
-    private record Row(long id, String topic, String key, String envelope) {
+    private record Row(long id, String topic, String key, String envelope, String traceparent) {
     }
 
     /** @return jumlah event yang terkirim */
     public int relayOnce() {
         Integer sent = db.tx().execute(status -> {
             List<Row> rows = db.jdbc().sql("""
-                            SELECT id, topic, event_key, envelope::text AS envelope FROM outbox
+                            SELECT id, topic, event_key, envelope::text AS envelope, envelope->>'traceparent' AS tp FROM outbox
                             WHERE published_at IS NULL
                             ORDER BY id
                             LIMIT :limit
                             FOR UPDATE SKIP LOCKED""")
                     .param("limit", batchSize)
                     .query((rs, i) -> new Row(rs.getLong("id"), rs.getString("topic"), rs.getString("event_key"),
-                            rs.getString("envelope")))
+                            rs.getString("envelope"), rs.getString("tp")))
                     .list();
             int ok = 0;
             for (Row row : rows) {
                 try {
-                    kafka.send(row.topic(), row.key(), row.envelope()).get(10, TimeUnit.SECONDS);
+                    var record = new ProducerRecord<>(row.topic(), row.key(), row.envelope());
+                    if (row.traceparent() != null) {
+                        // Konvensi W3C untuk Kafka; consumer kita membaca dari envelope, tooling lain dari header.
+                        record.headers().add(Traces.HEADER, row.traceparent().getBytes(StandardCharsets.US_ASCII));
+                    }
+                    kafka.send(record).get(10, TimeUnit.SECONDS);
                     db.jdbc().sql("UPDATE outbox SET published_at = now(), attempts = attempts + 1 WHERE id = :id")
                             .param("id", row.id()).update();
                     ok++;

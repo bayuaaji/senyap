@@ -24,6 +24,12 @@ public final class FrameType {
     /** Kode penutupan WebSocket saat access token tidak berlaku lagi: client refresh token lalu sambung ulang. */
     public static final int CLOSE_UNAUTHENTICATED = 4401;
 
+    /**
+     * Node gateway sedang berhenti (deploy/scale down): RFC 6455 "Service Restart". Client sambung ulang segera
+     * (jeda acak pendek, tanpa backoff panjang) ke node lain lewat load balancer, lalu sinkron {@code last_seq}.
+     */
+    public static final int CLOSE_SERVICE_RESTART = 1012;
+
     private FrameType() {
     }
 }

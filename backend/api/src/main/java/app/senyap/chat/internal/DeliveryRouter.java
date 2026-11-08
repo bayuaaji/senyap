@@ -8,6 +8,12 @@ import app.senyap.notifications.NotificationsApi;
 import app.senyap.notifications.NotificationsApi.Push;
 import app.senyap.shared.db.ModuleDatabase;
 import app.senyap.shared.id.Tsid;
+import app.senyap.shared.observability.Traces;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
+import io.opentelemetry.api.trace.SpanKind;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -42,9 +48,17 @@ class DeliveryRouter {
     private final IdentityApi identity;
     private final DmMediaApi media;
     private final ChatService chat;
+    private final Traces traces;
+    private final Timer deliveryLag;
 
     DeliveryRouter(@Qualifier("chatDatabase") ModuleDatabase db, JsonMapper json, RealtimePublisher realtime,
-                   NotificationsApi notifications, IdentityApi identity, DmMediaApi media, ChatService chat) {
+                   NotificationsApi notifications, IdentityApi identity, DmMediaApi media, ChatService chat,
+                   Traces traces, MeterRegistry meters) {
+        this.traces = traces;
+        // Pesan ditulis (event occurred_at) → frame dikirim ke node gateway. Bagian terbesar latensi kirim→terima.
+        this.deliveryLag = Timer.builder("senyap.chat.delivery.lag")
+                .description("Jeda pesan tersimpan sampai frame msg.new dikirim ke gateway")
+                .publishPercentileHistogram().register(meters);
         this.db = db;
         this.json = json;
         this.realtime = realtime;
@@ -57,6 +71,15 @@ class DeliveryRouter {
     @KafkaListener(id = CONSUMER_DELIVERY, groupId = CONSUMER_DELIVERY, topics = "${senyap.chat.topic:chat.events}")
     void onChatEvent(String value) {
         JsonNode event = json.readTree(value);
+        String parent = event.hasNonNull("traceparent") ? event.get("traceparent").asString() : null;
+        traces.inSpan("chat.deliver", SpanKind.CONSUMER, parent,
+                Map.of("senyap.event_type", event.get("type").asString()), () -> {
+                    route(event);
+                    return null;
+                });
+    }
+
+    private void route(JsonNode event) {
         UUID eventId = UUID.fromString(event.get("event_id").asString());
         if (consumed(CONSUMER_DELIVERY, eventId)) {
             return;
@@ -64,7 +87,10 @@ class DeliveryRouter {
         JsonNode p = event.get("payload");
         long conversationId = p.get("conversation_id").asLong();
         switch (event.get("type").asString()) {
-            case "message.created" -> messageCreated(conversationId, p.get("seq").asLong());
+            case "message.created" -> {
+                messageCreated(conversationId, p.get("seq").asLong());
+                deliveryLag.record(Duration.between(Instant.parse(event.get("occurred_at").asString()), Instant.now()));
+            }
             case "message.retracted" -> toMembers(conversationId, null,
                     WsFrame.of(FrameType.MSG_RETRACTED, null, Map.of("conversation_id", Tsid.toString(conversationId),
                             "seq", p.get("seq").asLong())));

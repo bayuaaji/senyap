@@ -3,6 +3,7 @@ package app.senyap.shared.outbox;
 import app.senyap.contracts.events.EventEnvelope;
 import app.senyap.shared.db.ModuleDatabase;
 import app.senyap.shared.id.Tsid;
+import app.senyap.shared.observability.Traces;
 import java.util.Map;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import tools.jackson.databind.json.JsonMapper;
@@ -34,7 +35,7 @@ public final class OutboxWriter {
         if (!TransactionSynchronizationManager.isActualTransactionActive()) {
             throw new IllegalStateException("OutboxWriter harus dipanggil di dalam transaksi modul " + db.schema());
         }
-        var event = EventEnvelope.of(type, payload);
+        var event = EventEnvelope.of(type, payload).withTraceparent(Traces.currentTraceparent());
         db.jdbc().sql("""
                         INSERT INTO outbox (id, event_id, topic, event_key, event_type, envelope, created_at)
                         VALUES (:id, :eventId, :topic, :key, :type, CAST(:envelope AS jsonb), :createdAt)""")

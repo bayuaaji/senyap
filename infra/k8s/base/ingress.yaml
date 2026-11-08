@@ -1,0 +1,58 @@
+# ingress-nginx. TLS 1.3 (NFR-16) di LB; sertifikat lewat cert-manager (ClusterIssuer `letsencrypt`).
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: senyap-public
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt
+    nginx.ingress.kubernetes.io/ssl-protocols: "TLSv1.3"
+    nginx.ingress.kubernetes.io/proxy-body-size: "1m"
+spec:
+  ingressClassName: nginx
+  tls: [{hosts: [api.senyap.app], secretName: senyap-api-tls}]
+  rules:
+    - host: api.senyap.app
+      http:
+        paths:
+          # Hanya API publik. /actuator dan /admin tidak pernah lewat ingress ini.
+          - {path: /v1, pathType: Prefix, backend: {service: {name: senyap-api, port: {name: http}}}}
+          - {path: /.well-known, pathType: Prefix, backend: {service: {name: senyap-api, port: {name: http}}}}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: senyap-realtime
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt
+    nginx.ingress.kubernetes.io/ssl-protocols: "TLSv1.3"
+    # WebSocket: idle timeout jauh di atas 120 dtk (client ping 25 dtk, gateway idle 75 dtk).
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
+spec:
+  ingressClassName: nginx
+  tls: [{hosts: [rt.senyap.app], secretName: senyap-rt-tls}]
+  rules:
+    - host: rt.senyap.app
+      http:
+        paths:
+          - {path: /v1/ws, pathType: Exact, backend: {service: {name: senyap-realtime, port: {name: ws}}}}
+---
+# Konsol moderator: hanya dari jaringan internal/VPN + SSO (OIDC, peran senyap-moderator/senyap-legal).
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: senyap-admin
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt
+    nginx.ingress.kubernetes.io/whitelist-source-range: "10.0.0.0/8"
+spec:
+  ingressClassName: nginx
+  tls: [{hosts: [admin.senyap.internal], secretName: senyap-admin-tls}]
+  rules:
+    - host: admin.senyap.internal
+      http:
+        paths:
+          - {path: /admin, pathType: Prefix, backend: {service: {name: senyap-api, port: {name: http}}}}
+          - {path: /login, pathType: Prefix, backend: {service: {name: senyap-api, port: {name: http}}}}
+          - {path: /oauth2, pathType: Prefix, backend: {service: {name: senyap-api, port: {name: http}}}}

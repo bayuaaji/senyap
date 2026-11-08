@@ -1,0 +1,15 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: senyap
+labels:
+  - pairs: {app.kubernetes.io/part-of: senyap}
+resources:
+  - config.yaml
+  - api.yaml
+  - worker.yaml
+  - realtime.yaml
+  - ingress.yaml
+  - db-bootstrap.yaml
+configMapGenerator:
+  - name: senyap-db-bootstrap
+    files: [bootstrap.sql]

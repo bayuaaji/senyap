@@ -233,14 +233,14 @@ memproses laporan P0 end-to-end di staging.
 
 ### Fase 5 — Siap produksi (± 2 minggu)
 
-- [ ] Infra produksi: Postgres managed (dengan PITR), Redis Cluster, Kafka managed, R2/S3 + CDN.
-- [ ] Gateway realtime di belakang load balancer yang mendukung WebSocket (idle timeout ≥ 120 detik). Drain koneksi dengan anggun saat deploy.
-- [ ] OpenTelemetry: trace dari `msg.send` sampai `msg.new`. Dashboard: koneksi aktif, latensi pesan, lag consumer, antrean moderasi.
-- [ ] Log tanpa isi pesan dan tanpa nomor HP (uji dengan test).
-- [ ] Load test k6: 50.000 koneksi WS + 3.000 pesan/s + feed 2.000 rps.
-- [ ] Pen-test ringan: IDOR di semua endpoint `conversations/*`, enumerasi alias, dan timing attack pada block.
-- [ ] Langkah kepatuhan di §8 requirements dicek bersama konsultan hukum.
-- [ ] Beta tertutup lewat TestFlight dan Play Console internal testing.
+- [x] Infra produksi: Postgres managed (dengan PITR), Redis Cluster, Kafka managed, R2/S3 + CDN. (Sebagai kode: `infra/k8s` Kustomize + `bootstrap.sql`; akun cloud belum ada.)
+- [x] Gateway realtime di belakang load balancer yang mendukung WebSocket (idle timeout ≥ 120 detik). Drain koneksi dengan anggun saat deploy. (Tutup 1012 disebar + preStop; `GatewayDrainTest`.)
+- [x] OpenTelemetry: trace dari `msg.send` sampai `msg.new`. Dashboard: koneksi aktif, latensi pesan, lag consumer, antrean moderasi. (`infra/observability`.)
+- [x] Log tanpa isi pesan dan tanpa nomor HP (uji dengan test).
+- [ ] Load test k6: 50.000 koneksi WS + 3.000 pesan/s + feed 2.000 rps. (Skrip + panduan siap, versi kecil lulus di laptop; target penuh menunggu staging.)
+- [x] Pen-test ringan: IDOR di semua endpoint `conversations/*`, enumerasi alias, dan timing attack pada block. (`ProductionReadinessIT`.)
+- [ ] Langkah kepatuhan di §8 requirements dicek bersama konsultan hukum. (Checklist: `docs/06-checklist-kepatuhan-dan-beta.md`.)
+- [ ] Beta tertutup lewat TestFlight dan Play Console internal testing. (Checklist: `docs/06-checklist-kepatuhan-dan-beta.md`.)
 
 ### Fase 6 — v2 & jalur skala
 

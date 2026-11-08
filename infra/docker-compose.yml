@@ -68,6 +68,43 @@ services:
     entrypoint: ["sh", "-c", "mc alias set local http://minio:9000 senyap senyap-minio && mc mb --ignore-existing local/media"]
     restart: "no"
 
+  # ---- Observability (opsional, Fase 5): docker compose --profile observability up -d
+  # Grafana http://localhost:3000 (anonim, dashboard "Senyap — ringkasan produksi"), Prometheus :9090.
+  # Jalankan app dengan SENYAP_OTLP_ENABLED=true supaya trace masuk ke collector (:4318) → Tempo.
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.118.0
+    profiles: [observability]
+    command: ["--config=/etc/otelcol/config.yaml"]
+    volumes: ["./observability/otel-collector.yaml:/etc/otelcol/config.yaml:ro"]
+    ports: ["4317:4317", "4318:4318"]
+    depends_on: [tempo]
+
+  tempo:
+    image: grafana/tempo:2.6.1
+    profiles: [observability]
+    command: ["-config.file=/etc/tempo.yaml"]
+    volumes: ["./observability/tempo.yaml:/etc/tempo.yaml:ro"]
+
+  prometheus:
+    image: prom/prometheus:v3.1.0
+    profiles: [observability]
+    volumes: ["./observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro"]
+    extra_hosts: ["host.docker.internal:host-gateway"]
+    ports: ["9090:9090"]
+
+  grafana:
+    image: grafana/grafana:11.4.0
+    profiles: [observability]
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/senyap.json
+    volumes:
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports: ["3000:3000"]
+    depends_on: [prometheus, tempo]
+
 volumes:
   pgdata:
   miniodata:

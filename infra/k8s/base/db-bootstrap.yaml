@@ -1,0 +1,31 @@
+# Role + schema per modul (aturan M1). Padanan DatabaseBootstrap yang hanya aktif di local/test:
+# aplikasi tidak pernah memegang kredensial admin; Job ini memakai secret admin terpisah.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: db-bootstrap
+spec:
+  backoffLimit: 3
+  ttlSecondsAfterFinished: 3600
+  template:
+    spec:
+      restartPolicy: OnFailure
+      securityContext: {runAsNonRoot: true, runAsUser: 70}
+      containers:
+        - name: psql
+          image: postgres:16-alpine
+          command: ["sh", "-c"]
+          args:
+            - >-
+              psql "$PG_ADMIN_URL" -v ON_ERROR_STOP=1
+              -v auth_pw="$SENYAP_DB_AUTH_PASSWORD" -v identity_pw="$SENYAP_DB_IDENTITY_PASSWORD"
+              -v media_pw="$SENYAP_DB_MEDIA_PASSWORD" -v posts_pw="$SENYAP_DB_POSTS_PASSWORD"
+              -v chat_pw="$SENYAP_DB_CHAT_PASSWORD" -v notifications_pw="$SENYAP_DB_NOTIFICATIONS_PASSWORD"
+              -v safety_pw="$SENYAP_DB_SAFETY_PASSWORD" -f /sql/bootstrap.sql
+          envFrom:
+            - secretRef: {name: senyap-secrets}
+            - secretRef: {name: senyap-db-admin}
+          volumeMounts: [{name: sql, mountPath: /sql}]
+      volumes:
+        - name: sql
+          configMap: {name: senyap-db-bootstrap}

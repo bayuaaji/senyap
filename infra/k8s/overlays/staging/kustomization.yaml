@@ -1,0 +1,28 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: senyap
+resources: [../../base]
+images:
+  - {name: senyap/api, newName: REGISTRY/senyap/api, newTag: GIT_SHA}
+  - {name: senyap/realtime, newName: REGISTRY/senyap/realtime, newTag: GIT_SHA}
+replicas:
+  - {name: senyap-api, count: 2}
+  - {name: senyap-worker, count: 1}
+  - {name: senyap-realtime, count: 2}
+secretGenerator:
+  # File berikut di-.gitignore; contoh kunci: ../secrets.example.env, ../db-admin.example.env
+  - {name: senyap-secrets, envs: [secrets.env]}
+  - {name: senyap-db-admin, envs: [db-admin.env]}
+patches:
+  - target: {kind: ConfigMap, name: senyap-config}
+    patch: |-
+      - {op: replace, path: /data/SENYAP_TRACE_SAMPLING, value: "1.0"}
+      - {op: replace, path: /data/SENYAP_MEDIA_PUBLIC_URL, value: "https://cdn.staging.senyap.app"}
+  - target: {kind: Ingress, name: senyap-public}
+    patch: |-
+      - {op: replace, path: /spec/tls/0/hosts/0, value: api.staging.senyap.app}
+      - {op: replace, path: /spec/rules/0/host, value: api.staging.senyap.app}
+  - target: {kind: Ingress, name: senyap-realtime}
+    patch: |-
+      - {op: replace, path: /spec/tls/0/hosts/0, value: rt.staging.senyap.app}
+      - {op: replace, path: /spec/rules/0/host, value: rt.staging.senyap.app}

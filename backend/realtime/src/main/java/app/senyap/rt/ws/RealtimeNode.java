@@ -1,7 +1,12 @@
 package app.senyap.rt.ws;
 
 import app.senyap.contracts.rt.RealtimeBus;
+import app.senyap.contracts.ws.FrameType;
 import app.senyap.contracts.ws.WsFrame;
+import app.senyap.rt.obs.Traces;
+import io.micrometer.core.instrument.Gauge;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.opentelemetry.api.trace.SpanKind;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -17,6 +22,7 @@ import org.springframework.context.SmartLifecycle;
 import org.springframework.data.redis.core.ReactiveStringRedisTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+import org.springframework.web.reactive.socket.CloseStatus;
 import reactor.core.Disposable;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -32,22 +38,40 @@ import tools.jackson.databind.json.JsonMapper;
 class RealtimeNode implements SmartLifecycle, DisposableBean {
 
     private static final Logger log = LoggerFactory.getLogger(RealtimeNode.class);
+    static final CloseStatus SERVICE_RESTART = new CloseStatus(FrameType.CLOSE_SERVICE_RESTART, "restart");
 
     private final ReactiveStringRedisTemplate redis;
     private final JsonMapper json;
     private final String nodeId;
     private final Duration idleTimeout;
     private final Map<UUID, Set<ClientSession>> sessions = new ConcurrentHashMap<>();
+    private final Duration drainSpread;
+    private final Duration drainTimeout;
     private volatile Disposable subscription;
     private volatile boolean running;
+    private volatile boolean draining;
+    private final Traces traces;
 
     RealtimeNode(ReactiveStringRedisTemplate redis, JsonMapper json,
                  @Value("${senyap.rt.node-id:}") String nodeId,
-                 @Value("${senyap.rt.idle-timeout:75s}") Duration idleTimeout) {
+                 @Value("${senyap.rt.idle-timeout:75s}") Duration idleTimeout,
+                 @Value("${senyap.rt.drain-spread:10s}") Duration drainSpread,
+                 @Value("${senyap.rt.drain-timeout:20s}") Duration drainTimeout,
+                 Traces traces, MeterRegistry meters) {
+        this.traces = traces;
+        Gauge.builder("senyap.rt.connections", this, RealtimeNode::sessionCount)
+                .description("Sesi WebSocket aktif di node ini").register(meters);
         this.redis = redis;
         this.json = json;
         this.nodeId = nodeId == null || nodeId.isBlank() ? UUID.randomUUID().toString() : nodeId;
         this.idleTimeout = idleTimeout;
+        this.drainSpread = drainSpread;
+        this.drainTimeout = drainTimeout;
+    }
+
+    /** {@code true} sejak shutdown dimulai: handshake baru langsung ditutup 1012 supaya client pindah node. */
+    boolean draining() {
+        return draining;
     }
 
     String nodeId() {
@@ -139,7 +163,10 @@ class RealtimeNode implements SmartLifecycle, DisposableBean {
     private void onBusMessage(String payload) {
         try {
             var d = json.readValue(payload, RealtimeBus.Delivery.class);
-            deliverLocal(UUID.fromString(d.to()), d.frame());
+            traces.inSpan("msg.new", SpanKind.PRODUCER, d.traceparent(), Map.of("senyap.frame", d.frame().t()), () -> {
+                deliverLocal(UUID.fromString(d.to()), d.frame());
+                return null;
+            });
         } catch (RuntimeException e) {
             log.warn("Pesan bus tidak valid: {}", e.getClass().getSimpleName());
         }
@@ -156,16 +183,57 @@ class RealtimeNode implements SmartLifecycle, DisposableBean {
         log.info("Gateway node {} aktif", nodeId);
     }
 
+    /**
+     * Graceful drain saat deploy (dipanggil sebelum web server berhenti, lihat {@link #getPhase()}):
+     * <ol>
+     *   <li>tandai draining → handshake baru ditolak 1012 (readiness juga sudah {@code REFUSING_TRAFFIC});</li>
+     *   <li>tutup sesi dengan kode {@link FrameType#CLOSE_SERVICE_RESTART}, <b>disebar</b> merata selama
+     *       {@code senyap.rt.drain-spread} supaya client tidak reconnect serentak ke node lain;</li>
+     *   <li>tunggu semua sesi lepas (maks. {@code senyap.rt.drain-timeout}), lalu hapus sisa presence.</li>
+     * </ol>
+     * Frame yang datang selama drain tetap dikirim ke sesi yang belum ditutup; yang terlewat ditutup sinkron
+     * {@code last_seq} saat client tersambung lagi.
+     */
     @Override
     public void stop() {
-        running = false;
-        // Graceful: hapus presence semua sesi supaya router langsung memakai push, lalu tutup socket.
+        draining = true;
         var all = new ArrayList<ClientSession>();
         sessions.values().forEach(all::addAll);
-        Flux.fromIterable(all).flatMap(this::unregister).then().block(Duration.ofSeconds(3));
-        all.forEach(ClientSession::complete);
+        log.info("Gateway node {} drain: {} sesi", nodeId, all.size());
+        long spreadMs = drainSpread.toMillis();
+        long start = System.currentTimeMillis();
+        for (int i = 0; i < all.size(); i++) {
+            long due = start + (all.size() <= 1 ? 0 : spreadMs * i / (all.size() - 1));
+            sleepUntil(due);
+            var s = all.get(i);
+            s.close(SERVICE_RESTART);
+        }
+        long deadline = System.currentTimeMillis() + drainTimeout.toMillis();
+        while (sessionCount() > 0 && System.currentTimeMillis() < deadline) {
+            sleepUntil(System.currentTimeMillis() + 50);
+        }
+        // Sisa (sesi macet): hapus presence supaya router memakai push, lalu tutup paksa.
+        var left = new ArrayList<ClientSession>();
+        sessions.values().forEach(left::addAll);
+        Flux.fromIterable(left).flatMap(this::unregister).then().block(Duration.ofSeconds(3));
+        left.forEach(ClientSession::complete);
         if (subscription != null) {
             subscription.dispose();
+        }
+        running = false;
+        log.info("Gateway node {} drain selesai dalam {} ms ({} sesi dipaksa)", nodeId,
+                System.currentTimeMillis() - start, left.size());
+    }
+
+    private static void sleepUntil(long epochMs) {
+        long wait = epochMs - System.currentTimeMillis();
+        if (wait <= 0) {
+            return;
+        }
+        try {
+            Thread.sleep(wait);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
         }
     }
 

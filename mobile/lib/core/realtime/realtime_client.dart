@@ -24,6 +24,12 @@ class Backoff {
   void reset() => _attempt = 0;
 }
 
+/// Kode tutup 1012 (Service Restart): node gateway sedang di-deploy. Sambung ulang cepat dengan jeda acak
+/// 0,2–3 detik (bukan backoff) supaya client tersebar ke node lain dan tidak menyerbu serentak.
+const closeServiceRestart = 1012;
+
+Duration restartDelay(Random random) => Duration(milliseconds: 200 + random.nextInt(2800));
+
 /// Koneksi realtime ke gateway (functional spec FS-05 §5.5). Frame = `{t, id, d}`.
 abstract interface class RealtimeTransport {
   Stream<Map<String, dynamic>> get frames;
@@ -56,6 +62,7 @@ class IoRealtimeClient implements RealtimeTransport {
   final Future<bool> Function() refreshToken;
   final Duration pingInterval;
   final Backoff _backoff;
+  final _random = Random();
 
   final _frames = StreamController<Map<String, dynamic>>.broadcast();
   final _connection = StreamController<bool>.broadcast();
@@ -133,7 +140,7 @@ class IoRealtimeClient implements RealtimeTransport {
       }
     }
     _retry?.cancel();
-    _retry = Timer(_backoff.next(), _connect);
+    _retry = Timer(code == closeServiceRestart ? restartDelay(_random) : _backoff.next(), _connect);
   }
 
   @override

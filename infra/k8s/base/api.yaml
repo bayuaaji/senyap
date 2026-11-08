@@ -1,0 +1,79 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: senyap-api
+  labels: {app: senyap-api}
+spec:
+  replicas: 3
+  selector: {matchLabels: {app: senyap-api}}
+  strategy:
+    rollingUpdate: {maxUnavailable: 0, maxSurge: 25%}
+  template:
+    metadata:
+      labels: {app: senyap-api}
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9464"
+        prometheus.io/path: /actuator/prometheus
+    spec:
+      terminationGracePeriodSeconds: 45
+      securityContext: {runAsNonRoot: true, seccompProfile: {type: RuntimeDefault}}
+      containers:
+        - name: api
+          image: senyap/api
+          env:
+            - {name: SPRING_PROFILES_ACTIVE, value: api}
+            - {name: SENYAP_API_PORT, value: "8080"}
+          envFrom:
+            - configMapRef: {name: senyap-config}
+            - secretRef: {name: senyap-secrets}
+          ports:
+            - {name: http, containerPort: 8080}
+            - {name: management, containerPort: 9464}
+          readinessProbe:
+            httpGet: {path: /actuator/health/readiness, port: management}
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: {path: /actuator/health/liveness, port: management}
+            periodSeconds: 10
+            failureThreshold: 6
+          startupProbe:
+            httpGet: {path: /actuator/health/liveness, port: management}
+            periodSeconds: 5
+            failureThreshold: 60
+          lifecycle:
+            preStop: {sleep: {seconds: 10}}
+          resources:
+            requests: {cpu: 500m, memory: 1Gi}
+            limits: {memory: 1536Mi}
+          securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
+          volumeMounts: [{name: tmp, mountPath: /tmp}]
+      volumes: [{name: tmp, emptyDir: {}}]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: senyap-api
+spec:
+  selector: {app: senyap-api}
+  ports: [{name: http, port: 80, targetPort: http}]
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: senyap-api
+spec:
+  scaleTargetRef: {apiVersion: apps/v1, kind: Deployment, name: senyap-api}
+  minReplicas: 3
+  maxReplicas: 30
+  metrics:
+    - type: Resource
+      resource: {name: cpu, target: {type: Utilization, averageUtilization: 65}}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: senyap-api
+spec:
+  minAvailable: 2
+  selector: {matchLabels: {app: senyap-api}}

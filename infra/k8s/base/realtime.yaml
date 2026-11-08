@@ -1,0 +1,93 @@
+# Gateway WebSocket. Tanpa akses DB; hanya Redis (presence + node channel) dan REST api.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: senyap-realtime
+  labels: {app: senyap-realtime}
+spec:
+  replicas: 3
+  selector: {matchLabels: {app: senyap-realtime}}
+  strategy:
+    # Kapasitas koneksi tidak boleh turun saat rollout; pod lama di-drain setelah pod baru siap.
+    rollingUpdate: {maxUnavailable: 0, maxSurge: 25%}
+  template:
+    metadata:
+      labels: {app: senyap-realtime}
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9464"
+        prometheus.io/path: /actuator/prometheus
+    spec:
+      # preStop 10 dtk + drain (sebar 10 dtk + tunggu ≤ 15 dtk) + sisa shutdown < 60 dtk.
+      terminationGracePeriodSeconds: 60
+      securityContext: {runAsNonRoot: true, seccompProfile: {type: RuntimeDefault}}
+      containers:
+        - name: realtime
+          image: senyap/realtime
+          env:
+            - {name: SENYAP_RT_PORT, value: "8080"}
+            # node-id = nama pod: stabil per pod, terbaca di presence/log.
+            - name: SENYAP_RT_NODE_ID
+              valueFrom: {fieldRef: {fieldPath: metadata.name}}
+          envFrom:
+            - configMapRef: {name: senyap-config}
+            - secretRef: {name: senyap-secrets}
+          ports:
+            - {name: ws, containerPort: 8080}
+            - {name: management, containerPort: 9464}
+          readinessProbe:
+            httpGet: {path: /actuator/health/readiness, port: management}
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: {path: /actuator/health/liveness, port: management}
+            periodSeconds: 10
+            failureThreshold: 6
+          lifecycle:
+            # LB/endpoint controller butuh waktu menghapus pod dari daftar target sebelum SIGTERM.
+            preStop: {sleep: {seconds: 10}}
+          resources:
+            requests: {cpu: "1", memory: 2Gi}
+            limits: {memory: 3Gi}
+          securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
+          volumeMounts: [{name: tmp, mountPath: /tmp}]
+      volumes: [{name: tmp, emptyDir: {}}]
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector: {matchLabels: {app: senyap-realtime}}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: senyap-realtime
+spec:
+  selector: {app: senyap-realtime}
+  ports: [{name: ws, port: 80, targetPort: ws}]
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: senyap-realtime
+spec:
+  scaleTargetRef: {apiVersion: apps/v1, kind: Deployment, name: senyap-realtime}
+  minReplicas: 3
+  maxReplicas: 40
+  behavior:
+    # Turun pelan: tiap scale-down memaksa ribuan client reconnect.
+    scaleDown:
+      stabilizationWindowSeconds: 600
+      policies: [{type: Pods, value: 1, periodSeconds: 120}]
+  metrics:
+    - type: Resource
+      resource: {name: memory, target: {type: Utilization, averageUtilization: 70}}
+    - type: Resource
+      resource: {name: cpu, target: {type: Utilization, averageUtilization: 60}}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: senyap-realtime
+spec:
+  maxUnavailable: 1
+  selector: {matchLabels: {app: senyap-realtime}}

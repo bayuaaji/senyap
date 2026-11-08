@@ -215,6 +215,7 @@ Kode reaktif (Mono/Flux) lebih sulit ditulis, di-debug, dan dibaca stack trace-n
 | **Testcontainers** | Test memakai Postgres, Redis, Kafka, dan MinIO **sungguhan** di container. Bug yang hanya muncul di DB asli (partisi, constraint, lock) tertangkap sebelum produksi. | H2 in-memory (perilakunya berbeda dari Postgres) |
 | **OpenTelemetry** | Standar terbuka, tidak terikat vendor. Satu trace bisa mengikuti pesan dari `msg.send` di gateway → transaksi DB → Kafka → delivery router → socket penerima. | SDK vendor (Datadog, New Relic), yang terkunci ke satu penyedia |
 | **k6** | Script JavaScript, **mendukung WebSocket** untuk load test chat, ringan dijalankan dari laptop maupun CI. | Gatling (Scala/Java, lebih berat), JMeter (GUI, dukungan WebSocket lemah) |
+| **Kustomize** (manifest k8s, Fase 5) | Bawaan `kubectl apply -k`, tanpa bahasa template; tiga workload dengan beda kecil antar lingkungan cukup di-patch overlay. | Helm (lebih cocok bila banyak parameter/tim), Terraform untuk layanan terkelola di luar cluster. |
 | **Docker Compose** (lokal) | Satu perintah menyalakan seluruh dependensi. Semua engineer punya lingkungan yang sama. | — |
 
 ---

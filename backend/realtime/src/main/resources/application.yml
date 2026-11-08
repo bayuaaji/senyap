@@ -2,15 +2,39 @@ spring:
   application:
     name: senyap-realtime
 
+  lifecycle:
+    # Drain gateway (sebaran + tunggu) harus muat; k8s terminationGracePeriodSeconds > preStop + nilai ini.
+    timeout-per-shutdown-phase: 40s
+
 server:
   port: ${SENYAP_RT_PORT:8190}
   shutdown: graceful
 
 management:
+  # Observability (Fase 5). Metrik: /actuator/prometheus (di k8s lewat port management terpisah,
+  # MANAGEMENT_SERVER_PORT, tidak lewat ingress publik). Trace: OTLP ke collector bila SENYAP_OTLP_ENABLED=true.
+  tracing:
+    sampling:
+      probability: ${SENYAP_TRACE_SAMPLING:1.0}
+    export:
+      otlp:
+        enabled: ${SENYAP_OTLP_ENABLED:false}
+  opentelemetry:
+    tracing:
+      export:
+        otlp:
+          endpoint: ${SENYAP_OTLP_TRACES_ENDPOINT:http://localhost:4318/v1/traces}
+  otlp:
+    metrics:
+      export:
+        enabled: false
+  metrics:
+    tags:
+      application: ${spring.application.name}
   endpoints:
     web:
       exposure:
-        include: health,info
+        include: health,info,prometheus
   endpoint:
     health:
       probes:
@@ -27,6 +51,9 @@ senyap:
     # Kosong = UUID acak per proses. Presence + channel Redis rt:node:{node-id}.
     node-id: ${SENYAP_RT_NODE_ID:}
     idle-timeout: 75s
+    # Graceful drain saat deploy: sesi ditutup 1012 disebar selama drain-spread, lalu tunggu maks. drain-timeout.
+    drain-spread: ${SENYAP_RT_DRAIN_SPREAD:10s}
+    drain-timeout: ${SENYAP_RT_DRAIN_TIMEOUT:15s}
     presence-refresh: 20s
     # JWKS publik api untuk verifikasi access token saat handshake (aturan M12).
     jwks-uri: ${SENYAP_JWKS_URI:http://localhost:8180/.well-known/jwks.json}

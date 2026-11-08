@@ -220,7 +220,7 @@ Semua feed bersifat *pull* dari index yang sama untuk semua orang, lalu di-cache
 | Tab | Isi | Sumber |
 |---|---|---|
 | **Terbaru** | Semua post publik, terbaru di atas | Index `created_at` |
-| **Populer** | Post 72 jam terakhir dengan `hot_score` tertinggi | Redis sorted set `feed:hot`, dihitung ulang tiap 1 menit |
+| **Populer** | Post 72 jam terakhir dengan `hot_score` tertinggi | Redis sorted set `{feed:hot}` (hash tag untuk Redis Cluster), dihitung ulang tiap 1 menit |
 | **Sekitar** | Post dengan geohash di sel user + 8 sel tetangga | Index `geohash`. User harus mengaktifkan lokasi. |
 | **Kategori** | Terbaru per kategori | Index `(category, created_at)` |
 
@@ -356,6 +356,7 @@ Endpoint: `wss://rt.senyap.app/v1/ws?token=<access_token>`. Semua frame berbentu
 
 **Implementasi (Fase 2)**
 - Handshake: `Authorization: Bearer <access_token>` (bukan query string). Token kedaluwarsa saat sesi berjalan → frame `error UNAUTHENTICATED` lalu tutup dengan kode **4401**; client refresh token lalu sambung ulang.
+- Node gateway berhenti (deploy/scale down) → tutup dengan kode **1012** (Service Restart), disebar beberapa detik. Client sambung ulang setelah jeda acak 0,2–3 dtk (bukan backoff) lalu sinkron `last_seq`. Handshake ke node yang sedang drain langsung ditutup 1012.
 - Gateway tidak punya akses DB: `msg.send` diteruskan ke `POST /v1/conversations/{id}/messages`, `msg.delivered`/`msg.read` ke `…/receipts`, dengan token user. Frame satu sesi diproses berurutan.
 - Presence: hash Redis `presence:{public_id}` (field `{node}|{session}`, nilai = heartbeat terakhir, TTL 60 dtk). Dikunci `public_id` karena gateway hanya tahu `public_id`; delivery router di api menerjemahkan user ID → `public_id` lewat identity. Frame ke node lewat channel `rt:node:{node}` (`contracts/rt/RealtimeBus`).
 - `typing` tidak lewat api maupun Kafka: gateway mencari lawan bicara (`GET /v1/conversations/{id}`, cache 60 dtk) lalu publish ke node-nya.
@@ -515,7 +516,7 @@ pesan DM, inbox, dan notifikasi.
 
 ## 5. Event (distributed queue)
 
-Envelope: `{event_id, type, occurred_at, payload}`. Consumer wajib idempotent (`event_id`).
+Envelope: `{event_id, type, version, occurred_at, payload, traceparent?}` (`traceparent` = W3C trace context untuk OpenTelemetry, juga dikirim sebagai header Kafka). Consumer wajib idempotent (`event_id`).
 **Isi pesan DM tidak dimasukkan ke event.** Event hanya membawa `conversation_id` dan `seq`,
 dan consumer yang butuh isi (moderasi) membacanya dari DB.
 

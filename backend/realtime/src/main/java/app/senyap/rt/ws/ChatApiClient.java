@@ -1,5 +1,6 @@
 package app.senyap.rt.ws;
 
+import app.senyap.rt.obs.Traces;
 import java.time.Duration;
 import java.util.Map;
 import org.springframework.beans.factory.annotation.Value;
@@ -48,8 +49,18 @@ class ChatApiClient {
     }
 
     Mono<Result> post(String token, String path, Map<String, Object> body) {
+        return post(token, path, body, null);
+    }
+
+    /** @param traceparent konteks trace W3C (span {@code msg.send}); api melanjutkannya sampai outbox/Kafka. */
+    Mono<Result> post(String token, String path, Map<String, Object> body, String traceparent) {
         return web.post().uri(path)
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                .headers(h -> {
+                    if (traceparent != null) {
+                        h.set(Traces.HEADER, traceparent);
+                    }
+                })
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(json.writeValueAsString(body))
                 .exchangeToMono(this::toResult)

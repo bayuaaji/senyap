@@ -4,6 +4,10 @@ import app.senyap.contracts.ws.FrameType;
 import app.senyap.contracts.ws.WsFrame;
 import app.senyap.rt.auth.AccessTokenVerifier;
 import app.senyap.rt.auth.HandshakeAuthFilter;
+import app.senyap.rt.obs.Traces;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
+import io.opentelemetry.api.trace.SpanKind;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -39,8 +43,15 @@ class GatewayWebSocketHandler implements WebSocketHandler {
     private final RealtimeNode node;
     private final ChatApiClient api;
     private final AccessTokenVerifier verifier;
+    private final Traces traces;
+    private final Timer sendLatency;
 
-    GatewayWebSocketHandler(JsonMapper json, RealtimeNode node, ChatApiClient api, AccessTokenVerifier verifier) {
+    GatewayWebSocketHandler(JsonMapper json, RealtimeNode node, ChatApiClient api, AccessTokenVerifier verifier,
+                            Traces traces, MeterRegistry meters) {
+        this.traces = traces;
+        this.sendLatency = Timer.builder("senyap.rt.send.latency")
+                .description("Frame msg.send diterima gateway sampai msg.ack/error dikirim balik")
+                .publishPercentileHistogram().register(meters);
         this.json = json;
         this.node = node;
         this.api = api;
@@ -57,6 +68,9 @@ class GatewayWebSocketHandler implements WebSocketHandler {
         if (header == null || !header.regionMatches(true, 0, "Bearer ", 0, 7)) {
             return ws.close(CloseStatus.POLICY_VIOLATION);
         }
+        if (node.draining()) {
+            return ws.close(RealtimeNode.SERVICE_RESTART);
+        }
         String token = header.substring(7).trim();
         return Mono.fromCallable(() -> verifier.verify(token))
                 .subscribeOn(reactor.core.scheduler.Schedulers.boundedElastic())
@@ -65,7 +79,7 @@ class GatewayWebSocketHandler implements WebSocketHandler {
     }
 
     private Mono<Void> session(WebSocketSession ws, AccessTokenVerifier.Principal principal, String token) {
-        var s = new ClientSession(ws.getId(), principal.publicId(), token);
+        var s = new ClientSession(ws.getId(), principal.publicId(), token, ws);
 
         var inbound = ws.receive()
                 .filter(m -> m.getType() == WebSocketMessage.Type.TEXT)
@@ -130,7 +144,15 @@ class GatewayWebSocketHandler implements WebSocketHandler {
                 body.put(k, v);
             }
         }
-        return api.post(s.token, "/v1/conversations/" + conv + "/messages", body).doOnNext(r -> {
+        // Awal trace msg.send → (api, outbox, Kafka, delivery router, Redis) → msg.new di gateway penerima.
+        var span = traces.start("msg.send", SpanKind.SERVER, null);
+        long started = System.nanoTime();
+        return api.post(s.token, "/v1/conversations/" + conv + "/messages", body, Traces.traceparent(span))
+                .doFinally(sig -> {
+                    span.end();
+                    sendLatency.record(System.nanoTime() - started, java.util.concurrent.TimeUnit.NANOSECONDS);
+                })
+                .doOnNext(r -> {
             if (r.ok()) {
                 var d = new LinkedHashMap<String, Object>();
                 d.put("client_msg_id", r.body().get("client_msg_id").asString());
@@ -199,8 +221,7 @@ class GatewayWebSocketHandler implements WebSocketHandler {
     private void apiError(ClientSession s, WsFrame in, ChatApiClient.Result r) {
         s.emit(error(in.id(), r.errorCode(), r.errorMessage()));
         if (r.status() == 401) {
-            s.closeStatus = new CloseStatus(FrameType.CLOSE_UNAUTHENTICATED, "token");
-            s.complete();
+            s.close(new CloseStatus(FrameType.CLOSE_UNAUTHENTICATED, "token"));
         }
     }
 

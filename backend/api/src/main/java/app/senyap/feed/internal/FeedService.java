@@ -26,7 +26,8 @@ import org.springframework.stereotype.Service;
 @Service
 class FeedService {
 
-    static final String HOT_KEY = "feed:hot";
+    // Hash tag {…}: kunci build sementara harus satu slot dengan kunci asal (RENAME) di Redis Cluster.
+    static final String HOT_KEY = "{feed:hot}";
 
     private final PostsApi posts;
     private final StringRedisTemplate redis;

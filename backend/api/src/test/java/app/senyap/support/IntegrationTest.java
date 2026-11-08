@@ -78,6 +78,12 @@ public abstract class IntegrationTest {
      * Request JSON. {@code body} null = tanpa body; {@code accessToken} null = tanpa header Authorization.
      */
     protected HttpResponse<String> send(String method, String path, String body, String accessToken) {
+        return send(method, path, body, accessToken, java.util.Map.of());
+    }
+
+    /** Seperti {@link #send(String, String, String, String)} dengan header tambahan (mis. {@code traceparent}). */
+    protected HttpResponse<String> send(String method, String path, String body, String accessToken,
+                                        java.util.Map<String, String> headers) {
         var builder = HttpRequest.newBuilder(URI.create("http://localhost:" + port + path))
                 .method(method, body == null ? HttpRequest.BodyPublishers.noBody() : HttpRequest.BodyPublishers.ofString(body));
         if (body != null) {
@@ -86,6 +92,7 @@ public abstract class IntegrationTest {
         if (accessToken != null) {
             builder.header("Authorization", "Bearer " + accessToken);
         }
+        headers.forEach(builder::header);
         try {
             return http.send(builder.build(), HttpResponse.BodyHandlers.ofString());
         } catch (IOException e) {

@@ -22,7 +22,8 @@ import org.springframework.stereotype.Service;
 class HeartService {
 
     private static final Logger log = LoggerFactory.getLogger(HeartService.class);
-    static final String DELTA_KEY = "posts:heart_delta";
+    // Hash tag {…}: kunci sementara RENAME harus satu slot dengan kunci asal di Redis Cluster.
+    static final String DELTA_KEY = "{posts:heart_delta}";
 
     private final ModuleDatabase db;
     private final OutboxWriter outbox;

@@ -50,7 +50,7 @@ backend/api/        modular monolith (auth, identity, media, posts, feed, chat, 
 backend/realtime/   gateway WebSocket
 backend/contracts/  skema frame WS + DTO bersama
 mobile/             Flutter
-infra/              docker-compose.yml, k8s/
+infra/              docker-compose.yml, k8s/ (Kustomize), observability/
 loadtest/           skrip k6
 docs/               spesifikasi
 ```
@@ -77,6 +77,10 @@ cd mobile && flutter analyze && flutter test
 - Konsol moderator (Fase 4): `http://localhost:8180/admin` (login dev di profil local/test; produksi OIDC, peran `senyap-moderator`/`senyap-legal`).
 - Bila Maven gagal mengunduh dependensi: `MAVEN_OPTS=-Djava.net.preferIPv4Stack=true`.
 - `flutter run` di simulator iOS sudah bisa (Xcode terpasang). Base URL API: `--dart-define=SENYAP_API_URL=...` (default `http://localhost:8180`).
+- Fase 5: `loadtest/run-local.sh` (load test kecil, infra terisolasi + port 8380/8382/8390, k6 lewat Docker);
+  `cd infra && docker compose --profile observability up -d` (Grafana :3000, Prometheus :9090, OTLP :4318; app dengan
+  `SENYAP_OTLP_ENABLED=true`); metrik `/actuator/prometheus`; render manifest `kubectl kustomize infra/k8s/overlays/staging`
+  (butuh `secrets.env` + `db-admin.env` di overlay, contoh di `infra/k8s/overlays/*.example.env`).
 - Login lokal: OTP mock, kode selalu `000000` (profil local/test), tidak ada SMS. Contoh:
   `curl -XPOST localhost:8180/v1/auth/otp -H 'Content-Type: application/json' -d '{"phone":"081200000001"}'`, lalu
   `POST /v1/auth/verify` dengan `{"phone","code":"000000","device":{"platform":"ios"},"age_confirmed":true}`.
@@ -102,7 +106,8 @@ cd mobile && flutter analyze && flutter test
 - Consumer event wajib idempotent berdasarkan `event_id`.
 - ID: TSID, dikirim ke client sebagai string. Paginasi selalu cursor, tidak pernah offset.
 - Format error: `{ "error": { "code", "message", "request_id" } }`. Kode error mengikuti functional spec §4.
-- Jangan pernah menulis isi pesan, nomor HP, atau token ke log.
+- Jangan pernah menulis isi pesan, nomor HP, atau token ke log (diuji `ProductionReadinessIT`).
+- Kunci Redis yang di-`RENAME`/multi-key wajib memakai hash tag `{…}` (siap Redis Cluster).
 - Teks yang tampil ke user memakai Bahasa Indonesia.
 - Autentikasi: semua `/v1/**` wajib Bearer kecuali `/v1/auth/{otp,verify,refresh}` (`shared/security/BearerTokenFilter`).
   Controller menerima `AuthenticatedUser` sebagai parameter. Rate limit: `shared/ratelimit/RateLimiter` dengan kunci

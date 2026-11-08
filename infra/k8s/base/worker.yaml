@@ -1,0 +1,57 @@
+# Worker: relay outbox (FOR UPDATE SKIP LOCKED, aman banyak replika), consumer Kafka (delivery router, moderasi),
+# job terjadwal. Tidak menerima trafik publik.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: senyap-worker
+  labels: {app: senyap-worker}
+spec:
+  replicas: 2
+  selector: {matchLabels: {app: senyap-worker}}
+  strategy:
+    rollingUpdate: {maxUnavailable: 0, maxSurge: 1}
+  template:
+    metadata:
+      labels: {app: senyap-worker}
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9464"
+        prometheus.io/path: /actuator/prometheus
+    spec:
+      terminationGracePeriodSeconds: 45
+      securityContext: {runAsNonRoot: true, seccompProfile: {type: RuntimeDefault}}
+      containers:
+        - name: worker
+          image: senyap/api
+          env:
+            - {name: SPRING_PROFILES_ACTIVE, value: worker}
+            - {name: SENYAP_API_PORT, value: "8080"}
+          envFrom:
+            - configMapRef: {name: senyap-config}
+            - secretRef: {name: senyap-secrets}
+          ports:
+            - {name: management, containerPort: 9464}
+          readinessProbe:
+            httpGet: {path: /actuator/health/readiness, port: management}
+          livenessProbe:
+            httpGet: {path: /actuator/health/liveness, port: management}
+            periodSeconds: 10
+            failureThreshold: 6
+          startupProbe:
+            httpGet: {path: /actuator/health/liveness, port: management}
+            periodSeconds: 5
+            failureThreshold: 60
+          resources:
+            requests: {cpu: 500m, memory: 1Gi}
+            limits: {memory: 1536Mi}
+          securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
+          volumeMounts: [{name: tmp, mountPath: /tmp}]
+      volumes: [{name: tmp, emptyDir: {}}]
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: senyap-worker
+spec:
+  minAvailable: 1
+  selector: {matchLabels: {app: senyap-worker}}

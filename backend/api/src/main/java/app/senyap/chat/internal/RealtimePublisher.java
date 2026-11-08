@@ -3,6 +3,7 @@ package app.senyap.chat.internal;
 import app.senyap.contracts.rt.RealtimeBus;
 import app.senyap.contracts.ws.WsFrame;
 import app.senyap.identity.IdentityApi;
+import app.senyap.shared.observability.Traces;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import java.time.Duration;
@@ -64,7 +65,8 @@ class RealtimePublisher {
             if (frame == null) {
                 continue;
             }
-            String payload = json.writeValueAsString(new RealtimeBus.Delivery(pub.toString(), frame));
+            String payload = json.writeValueAsString(
+                    new RealtimeBus.Delivery(pub.toString(), frame, Traces.currentTraceparent()));
             for (String node : nodes) {
                 try {
                     redis.convertAndSend(RealtimeBus.nodeChannel(node), payload);

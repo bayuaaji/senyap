@@ -1,6 +1,7 @@
 package app.senyap.contracts.rt;
 
 import app.senyap.contracts.ws.WsFrame;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import java.time.Duration;
 import java.util.UUID;
@@ -41,7 +42,15 @@ public final class RealtimeBus {
         return "rt:node:" + nodeId;
     }
 
-    /** Satu frame untuk semua sesi milik {@code to} ({@code public_id}) di node penerima. */
-    public record Delivery(@JsonProperty("to") String to, @JsonProperty("frame") WsFrame frame) {
+    /**
+     * Satu frame untuk semua sesi milik {@code to} ({@code public_id}) di node penerima. {@code traceparent}
+     * (opsional) menyambung trace {@code msg.send} → {@code msg.new} (OpenTelemetry).
+     */
+    public record Delivery(@JsonProperty("to") String to, @JsonProperty("frame") WsFrame frame,
+                           @JsonProperty("traceparent") @JsonInclude(JsonInclude.Include.NON_NULL) String traceparent) {
+
+        public Delivery(String to, WsFrame frame) {
+            this(to, frame, null);
+        }
     }
 }

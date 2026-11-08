@@ -144,7 +144,7 @@ class PostFeedReplyIT extends IntegrationTest {
                 assertThat(getJson("/v1/posts/" + postId, a.token()).get("heart_count").asInt()).isEqualTo(1));
 
         // Populer: sorted set dibangun ulang dari hot_score
-        redis.delete("feed:hot");
+        redis.delete("{feed:hot}");
         assertThat(find(getJson("/v1/feed/popular", b.token()), postId)).isNotNull();
 
         // Pembuat post menyembunyikan balasan B → bukan asal Bisik lagi, tidak terlihat user lain

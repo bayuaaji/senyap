@@ -245,4 +245,12 @@ void main() {
     b.reset();
     expect(b.next().inMilliseconds, inInclusiveRange(800, 1200));
   });
+
+  test('tutup 1012 (deploy gateway): sambung ulang cepat dengan jeda acak 0,2–3 dtk', () {
+    final r = Random(7);
+    for (var i = 0; i < 50; i++) {
+      final d = restartDelay(r);
+      expect(d.inMilliseconds, inInclusiveRange(200, 3000));
+    }
+  });
 }

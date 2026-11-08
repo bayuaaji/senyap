@@ -1,0 +1,12 @@
+# Scrape proses yang dijalankan di laptop (bukan container). Port default; ubah bila menjalankan di port lain.
+global: {scrape_interval: 15s}
+scrape_configs:
+  - job_name: senyap
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["host.docker.internal:8180"]
+        labels: {role: api}
+      - targets: ["host.docker.internal:8182"]
+        labels: {role: worker}
+      - targets: ["host.docker.internal:8190"]
+        labels: {role: realtime}

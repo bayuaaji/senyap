@@ -32,3 +32,7 @@ mobile/ios/Flutter/flutter_export_environment.sh
 
 # Office lock files
 ~$*
+
+# Rahasia k8s per lingkungan (lihat infra/k8s/overlays/*.example.env)
+infra/k8s/overlays/*/secrets.env
+infra/k8s/overlays/*/db-admin.env
