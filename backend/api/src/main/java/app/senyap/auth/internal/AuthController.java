@@ -87,10 +87,6 @@ class AuthController {
         if (account.status() == AccountStatus.BANNED) {
             throw new ApiException(ErrorCode.FORBIDDEN, "Akun ini diblokir karena melanggar aturan.");
         }
-        if (account.status() == AccountStatus.DELETED) {
-            throw new ApiException(ErrorCode.FORBIDDEN,
-                    "Akun dengan nomor ini sedang dihapus. Kamu bisa mendaftar lagi setelah prosesnya selesai.");
-        }
         var device = body.device();
         var t = tokens.createSession(account.userId(), account.publicId(), device.platform(), blankToNull(device.pushToken()));
         return new VerifyResponse(TokensDto.of(t), !account.onboarded());

@@ -15,7 +15,8 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 /**
- * Purge akun {@code DELETED} setelah masa tenggang (functional spec FS-01: purge dalam 30 hari).
+ * Purge akun {@code DELETED} setelah masa tenggang (functional spec FS-01: purge dalam 30 hari). Selama
+ * masa tenggang, login ulang membatalkan penghapusan ({@code deleted_at} dikosongkan, jadi tidak terpilih di sini).
  * {@code phone_hmac} diganti byte acak (nomor HP tidak lagi terhubung, dan nomor itu bisa mendaftar
  * akun baru), {@code home_geohash} dihapus, lalu event {@code user.purged} diterbitkan. Modul pemilik
  * konten (posts, chat) meng-anonimkan konten user itu menjadi "[dihapus]" saat menerima event tersebut

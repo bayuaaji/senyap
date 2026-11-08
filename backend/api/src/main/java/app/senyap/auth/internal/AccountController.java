@@ -40,7 +40,7 @@ class AccountController {
 
     /**
      * {@code DELETE /v1/me {confirm: "HAPUS"}} → 202. Akun ditandai {@code DELETED} (event {@code user.deleted}),
-     * semua sesi dicabut; purge oleh job worker. Urutannya sengaja identity dulu: kalau pencabutan sesi gagal,
+     * semua sesi dicabut; purge oleh job worker. Login ulang sebelum purge membatalkan penghapusan. Urutannya sengaja identity dulu: kalau pencabutan sesi gagal,
      * akun {@code DELETED} tetap tidak bisa memakai token (ditolak saat autentikasi dan refresh).
      */
     @DeleteMapping("/v1/me")

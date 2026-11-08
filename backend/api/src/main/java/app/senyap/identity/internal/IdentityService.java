@@ -59,6 +59,13 @@ class IdentityService implements IdentityApi, PrincipalResolver {
             var existing = findByPhone(phoneHmac);
             if (existing.isPresent()) {
                 var u = existing.get();
+                if (u.status() == AccountStatus.DELETED) {
+                    var restored = restore(u);
+                    if (restored.isPresent()) {
+                        return new SignInResult(u.id(), u.publicId(), restored.get(), false, u.onboarded());
+                    }
+                    continue; // baru saja di-purge job worker: baca ulang (nomor sudah diputus → akun baru)
+                }
                 return new SignInResult(u.id(), u.publicId(), u.status(), false, u.onboarded());
             }
             try {
@@ -88,6 +95,28 @@ class IdentityService implements IdentityApi, PrincipalResolver {
             outbox.append("user.registered", Long.toString(id), Map.of("user_id", id));
         });
         return new SignInResult(id, publicId, AccountStatus.ACTIVE, true, false);
+    }
+
+    /**
+     * Login ulang sebelum purge membatalkan penghapusan: status kembali ke status sebelum dihapus
+     * (biasanya {@code ACTIVE}), {@code deleted_at} dikosongkan sehingga job purge tidak memprosesnya,
+     * dan event {@code user.restored} diterbitkan. {@code public_id} dan alias tidak berubah.
+     *
+     * @return status baru, atau kosong bila akun sudah di-purge di antara baca dan tulis
+     */
+    private Optional<AccountStatus> restore(UserRow u) {
+        var status = db.tx().execute(s -> {
+            var restored = db.jdbc().sql("""
+                            UPDATE users SET status = COALESCE(deleted_from_status, 'ACTIVE'),
+                                             deleted_at = NULL, deleted_from_status = NULL
+                            WHERE id = :id AND status = 'DELETED' AND purged_at IS NULL
+                            RETURNING status""")
+                    .param("id", u.id()).query(String.class).optional().map(AccountStatus::valueOf);
+            restored.ifPresent(st -> outbox.append("user.restored", Long.toString(u.id()), Map.of("user_id", u.id())));
+            return restored;
+        });
+        principals.invalidate(u.publicId());
+        return status;
     }
 
     private Optional<UserRow> findByPhone(byte[] phoneHmac) {
@@ -126,8 +155,8 @@ class IdentityService implements IdentityApi, PrincipalResolver {
     public void markDeleted(long userId) {
         UUID publicId = db.tx().execute(s -> {
             var pub = db.jdbc().sql("""
-                            UPDATE users SET status = 'DELETED', deleted_at = now()
-                            WHERE id = :id AND status <> 'DELETED' RETURNING public_id""")
+                            UPDATE users SET status = 'DELETED', deleted_at = now(), deleted_from_status = status
+                            WHERE id = :id AND status IN ('ACTIVE', 'RESTRICTED', 'SUSPENDED') RETURNING public_id""")
                     .param("id", userId).query(UUID.class).optional();
             pub.ifPresent(p -> outbox.append("user.deleted", Long.toString(userId), Map.of("user_id", userId)));
             return pub.orElse(null);

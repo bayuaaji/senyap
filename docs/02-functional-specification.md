@@ -183,10 +183,10 @@ Tabel dipartisi per bulan (`created_at`) supaya retensi dan purge murah.
 **Detail implementasi (Fase 1)**
 - `POST /v1/auth/otp` menerima `channel` opsional (`sms`/`whatsapp`, default `sms`). Nomor lokal (`0812…`) dinormalisasi ke E.164.
 - Kode salah atau kedaluwarsa → 400 `OTP_INVALID`. Hanya kode terakhir per nomor yang berlaku.
-- `POST /v1/auth/verify` untuk akun `BANNED` atau `DELETED` (belum di-purge) → 403 `FORBIDDEN`. `is_new` = profil belum dibuat (alias belum dipilih), jadi tetap `true` kalau user keluar dari app di tengah onboarding.
+- `POST /v1/auth/verify` untuk akun `BANNED` → 403 `FORBIDDEN`. Untuk akun `DELETED` yang belum di-purge, login ulang **membatalkan penghapusan**: akun kembali ke status sebelum dihapus (biasanya `ACTIVE`; `RESTRICTED`/`SUSPENDED` tetap berlaku), `public_id` dan alias tidak berubah, event `user.restored`. `is_new` = profil belum dibuat (alias belum dipilih), jadi tetap `true` kalau user keluar dari app di tengah onboarding.
 - Respons token: `{tokens: {access_token, refresh_token, expires_in}}`. Access token JWT ES256; `sub` = `public_id` (bukan user ID), `did` = ID device. Refresh token opaque, dirotasi setiap dipakai; token lama yang dipakai lagi di luar jeda 10 detik mencabut seluruh rantai sesi device itu.
 - `GET /v1/me/profile` juga mengembalikan `onboarded`. `alias_changeable_at` = `null` kalau alias boleh diganti sekarang.
-- `DELETE /v1/me`: semua sesi dicabut seketika; purge (nomor HP diputus dari akun) maksimal 30 hari kemudian. Setelah purge, nomor yang sama bisa mendaftar sebagai akun baru.
+- `DELETE /v1/me`: semua sesi dicabut seketika; purge (nomor HP diputus dari akun) maksimal 30 hari kemudian (masa tenggang 29 hari). Login lagi sebelum purge membatalkan penghapusan. Setelah purge, nomor yang sama mendaftar sebagai akun baru. Akun `BANNED` tidak bisa dihapus.
 
 ### FS-02 Post anonim [MVP]
 
@@ -489,7 +489,7 @@ dan consumer yang butuh isi (moderasi) membacanya dari DB.
 | `user.blocked` | Safety | Chat (tutup percakapan), cache filter feed | `blocker_id` |
 | `user.registered` | Identity | (belum ada) | `user_id` |
 | `user.alias_changed` | Identity | Read model alias di modul lain (M8) | `user_id` |
-| `user.deleted` / `user.purged` | Identity | Posts, chat: anonimkan konten jadi "[dihapus]" saat `user.purged` | `user_id` |
+| `user.deleted` / `user.restored` / `user.purged` | Identity | Posts, chat: anonimkan konten jadi "[dihapus]" saat `user.purged` (`user.restored` = penghapusan dibatalkan) | `user_id` |
 
 ---
 

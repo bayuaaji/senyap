@@ -108,13 +108,30 @@ class AccountLifecycleIT extends IntegrationTest {
         assertThat(deviceCount(publicId)).isZero();
         assertThat(outboxTypes()).contains("user.registered", "user.alias_changed", "user.deleted");
 
-        // Selama masa tenggang nomor yang sama tidak bisa dipakai
-        send("POST", "/v1/auth/otp", "{\"phone\":\"" + phone + "\"}", null);
-        var blocked = send("POST", "/v1/auth/verify", verifyBody(phone, MOCK_CODE, "ios", null), null);
-        assertThat(blocked.statusCode()).isEqualTo(403);
-        assertThat(errorCode(blocked)).isEqualTo("FORBIDDEN");
+        // 5. Login lagi selama masa tenggang membatalkan penghapusan: akun yang sama, alias yang sama
+        assertThat(send("POST", "/v1/auth/otp", "{\"phone\":\"" + phone + "\"}", null).statusCode()).isEqualTo(202);
+        var restored = body(send("POST", "/v1/auth/verify", verifyBody(phone, MOCK_CODE, "ios", null), null), 200);
+        assertThat(restored.get("is_new").asBoolean()).isFalse();
+        String accessRestored = restored.get("tokens").get("access_token").asString();
+        var restoredProfile = body(send("GET", "/v1/me/profile", null, accessRestored), 200);
+        assertThat(restoredProfile.get("public_id").asString()).isEqualTo(publicId);
+        assertThat(restoredProfile.get("alias").get("name").asString()).isEqualTo("Kelinci Jingga");
+        assertThat(restoredProfile.get("alias").get("tag").asString()).isEqualTo(chosen.get("alias").get("tag").asString());
+        assertThat(userColumn(publicId, "status")).isEqualTo("ACTIVE");
+        assertThat(userColumn(publicId, "deleted_at")).isNull();
+        assertThat(outboxTypes()).contains("user.restored");
 
-        // 5. Masa tenggang lewat → job purge worker memutus nomor HP dari akun
+        // Job purge (tiap 1 dtk di profil test) tidak menyentuh akun yang dipulihkan, walau sudah lewat 30 hari
+        identity.jdbc().sql("UPDATE users SET created_at = now() - interval '60 days' WHERE public_id = :p")
+                .param("p", java.util.UUID.fromString(publicId)).update();
+        await().during(Duration.ofSeconds(3)).atMost(Duration.ofSeconds(5)).until(() ->
+                userColumn(publicId, "purged_at") == null && "ACTIVE".equals(userColumn(publicId, "status")));
+        assertThat(send("GET", "/v1/me/profile", null, accessRestored).statusCode()).isEqualTo(200);
+
+        // Hapus lagi untuk menguji purge
+        assertThat(send("DELETE", "/v1/me", "{\"confirm\":\"HAPUS\"}", accessRestored).statusCode()).isEqualTo(202);
+
+        // 6. Masa tenggang lewat → job purge worker memutus nomor HP dari akun
         identity.jdbc().sql("UPDATE users SET deleted_at = now() - interval '30 days' WHERE public_id = :p")
                 .param("p", java.util.UUID.fromString(publicId)).update();
         await().atMost(Duration.ofSeconds(15)).until(() -> identity.jdbc()
@@ -181,6 +198,23 @@ class AccountLifecycleIT extends IntegrationTest {
     }
 
     @Test
+    void membatalkanHapusAkunTidakMenghapusPembatasanModerasi() {
+        String phone = randomLocalPhone();
+        send("POST", "/v1/auth/otp", "{\"phone\":\"" + phone + "\"}", null);
+        var v = body(send("POST", "/v1/auth/verify", verifyBody(phone, MOCK_CODE, "ios", null), null), 200);
+        String access = v.get("tokens").get("access_token").asString();
+        String publicId = body(send("GET", "/v1/me/profile", null, access), 200).get("public_id").asString();
+        identity.jdbc().sql("UPDATE users SET status = 'SUSPENDED' WHERE public_id = :p")
+                .param("p", java.util.UUID.fromString(publicId)).update();
+
+        assertThat(send("DELETE", "/v1/me", "{\"confirm\":\"HAPUS\"}", access).statusCode()).isEqualTo(202);
+        send("POST", "/v1/auth/otp", "{\"phone\":\"" + phone + "\"}", null);
+        body(send("POST", "/v1/auth/verify", verifyBody(phone, MOCK_CODE, "ios", null), null), 200);
+
+        assertThat(userColumn(publicId, "status")).isEqualTo("SUSPENDED");
+    }
+
+    @Test
     void tanpaTokenAtauTokenPalsuDitolak() {
         var res = send("GET", "/v1/me/profile", null, null);
         assertThat(res.statusCode()).isEqualTo(401);
@@ -194,6 +228,11 @@ class AccountLifecycleIT extends IntegrationTest {
                 .param("p", java.util.UUID.fromString(publicId)).query(Long.class).single();
         return auth.jdbc().sql("SELECT count(*) FROM devices WHERE user_id = :u").param("u", userId)
                 .query(Long.class).single();
+    }
+
+    private String userColumn(String publicId, String column) {
+        return identity.jdbc().sql("SELECT " + column + "::text FROM users WHERE public_id = :p")
+                .param("p", java.util.UUID.fromString(publicId)).query((rs, n) -> rs.getString(1)).list().getFirst();
     }
 
     private java.util.List<String> outboxTypes() {

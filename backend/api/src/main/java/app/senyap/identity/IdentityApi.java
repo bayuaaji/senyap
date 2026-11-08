@@ -11,7 +11,8 @@ public interface IdentityApi {
 
     /**
      * Login atau daftar berdasarkan {@code phone_hmac} (hex). Akun baru dibuat dengan alias acak dan
-     * {@code age_confirmed_at = now}. Tidak mengubah akun yang sudah ada.
+     * {@code age_confirmed_at = now}. Akun {@code DELETED} yang belum di-purge dipulihkan (penghapusan
+     * dibatalkan, event {@code user.restored}); akun lain tidak diubah.
      */
     SignInResult signIn(String phoneHmacHex);
 
@@ -27,7 +28,8 @@ public interface IdentityApi {
 
     /**
      * Menandai akun {@code DELETED} (functional spec FS-01, {@code DELETE /v1/me}) dan menerbitkan
-     * event {@code user.deleted}. Purge dilakukan job worker setelah masa tenggang. Idempotent.
+     * event {@code user.deleted}. Purge dilakukan job worker setelah masa tenggang; login ulang sebelum itu
+     * membatalkannya ({@link #signIn}). Akun {@code BANNED} tidak bisa dihapus. Idempotent.
      */
     void markDeleted(long userId);
 }

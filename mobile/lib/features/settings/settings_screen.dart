@@ -114,7 +114,8 @@ class _DeleteDialogState extends State<_DeleteDialog> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text('Akunmu dihapus permanen dalam 30 hari. Post, balasan, dan pesanmu akan tampil '
-              'sebagai "[dihapus]". Ketik HAPUS untuk mengonfirmasi.'),
+              'sebagai "[dihapus]". Kalau kamu masuk lagi dengan nomor yang sama dalam 29 hari, '
+              'penghapusan dibatalkan dan akunmu kembali seperti semula. Ketik HAPUS untuk mengonfirmasi.'),
           const SizedBox(height: 12),
           TextField(key: const Key('delete-confirm'), controller: _controller, autofocus: true),
         ],

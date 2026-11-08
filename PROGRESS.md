@@ -25,7 +25,6 @@ Checklist rinci tiap fase ada di `docs/03-build-guide.md` §4. Centang di sana s
 - Nomor hotline Indonesia untuk kartu bantuan risiko menyakiti diri (cek sebelum Fase 4).
 - Kepatuhan hukum (PSE, UU PDP) perlu dicek dengan konsultan sebelum rilis.
 - Penyedia OTP (SMS/WhatsApp) belum dipilih. Sampai ada implementasi `OtpSender` untuk produksi, api sengaja gagal start di luar profil local/test. API moderasi teks/gambar juga belum dipilih (Fase 4).
-- Login ulang dengan nomor yang akunnya sedang dihapus (sebelum purge) saat ini ditolak 403. Perlu diputuskan: tetap tolak, atau batalkan penghapusan (aktifkan lagi)?
 
 ## Catatan serah terima
 
@@ -38,6 +37,11 @@ Tulis entri baru di paling atas dengan format ini:
 - Masalah / keputusan baru: …
 - Langkah berikutnya: …
 ```
+
+### 2026-11-08 — Fase 1 (lanjutan)
+- Selesai: keputusan user untuk pertanyaan terbuka hapus akun = **dibatalkan**. Login ulang (OTP verify) sebelum purge membatalkan penghapusan: status kembali ke status sebelum dihapus, `deleted_at` dikosongkan (job purge tidak memprosesnya), event `user.restored`, `public_id` + alias tetap. Setelah purge, nomor yang sama = akun baru. Migrasi `identity/V3` (`deleted_from_status`). IT di `AccountLifecycleIT`. Teks konfirmasi hapus akun di Flutter menyebut pembatalan.
+- Masalah / keputusan baru: status dipulihkan ke status **sebelum** dihapus (bukan selalu `ACTIVE`), supaya `RESTRICTED`/`SUSPENDED` tidak bisa dihapus dengan cara hapus akun lalu login lagi. Akun `BANNED` tidak bisa dihapus (memang tidak bisa login).
+- Langkah berikutnya: Fase 2 (Bisik/DM, FS-05).
 
 ### 2026-11-08 — Fase 1
 - Selesai: semua item Fase 1 di build guide §4. `./mvnw verify` lulus (contracts 2, api 52 unit + 25 IT, realtime 3); `flutter analyze` bersih, `flutter test` 11 lulus. Dicoba manual dengan profil local: OTP → verify → profile → JWKS.
