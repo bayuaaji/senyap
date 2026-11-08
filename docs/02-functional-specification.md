@@ -314,7 +314,6 @@ Sebelum diterima, pengirim **tidak bisa** mengirim pesan tambahan. Ini mencegah 
 | GET | `/v1/conversations/badge` | `{unread_messages, requests}` untuk badge tab |
 | POST | `/v1/media/dm-uploads` | `{mime_type, size_bytes}` → 201 `{media_id, upload_url, upload_method, upload_headers, expires_at}` (presigned PUT, objek privat) |
 | POST | `/v1/media/dm-uploads/{id}/complete` | 200 `{media_id, status: "READY"}` |
-| POST | `/v1/dev/origins` | **Sementara, hanya profil local/test**: `{excerpt}` → asal Bisik seed milik pemanggil, sampai Fase 3 digabung |
 
 Bentuk `conversation`: `{id, status, role: "initiator"|"recipient", peer: {public_id, name, tag, color}, origin: {type, id, excerpt}, last_seq, last_message, unread_count, my_delivered_up_to, my_read_up_to, peer_delivered_up_to, peer_read_up_to, last_message_at, created_at}`.
 Bentuk pesan: `{conversation_id, seq, sender: "me"|"them", type, body?, media?: {id, url, mime_type, expires_at}, retracted, client_msg_id? (hanya milik sendiri), created_at}`.

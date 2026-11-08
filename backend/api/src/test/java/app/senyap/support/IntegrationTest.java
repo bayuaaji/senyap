@@ -21,6 +21,7 @@ import org.testcontainers.lifecycle.Startables;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.redpanda.RedpandaContainer;
 import org.testcontainers.utility.DockerImageName;
+import tools.jackson.databind.json.JsonMapper;
 
 /**
  * Basis semua integration test: Postgres 16, Redis 7, Redpanda, MinIO lewat Testcontainers (satu set
@@ -93,6 +94,28 @@ public abstract class IntegrationTest {
             Thread.currentThread().interrupt();
             throw new IllegalStateException(e);
         }
+    }
+
+    @Autowired
+    private JsonMapper testJson;
+
+    /**
+     * Membuat post publik milik {@code accessToken} dan mengembalikan ID-nya. Latar diambil dari galeri
+     * bawaan, yang diisi worker secara asinkron saat start. Dipakai test Bisik sebagai asal percakapan.
+     */
+    protected String createPost(String accessToken, String body) {
+        var bg = new String[1];
+        org.awaitility.Awaitility.await().atMost(java.time.Duration.ofSeconds(60)).untilAsserted(() -> {
+            var items = testJson.readTree(send("GET", "/v1/backgrounds?category=curhat", null, accessToken).body())
+                    .get("items");
+            assertThat(items.size()).as("galeri latar bawaan sudah terisi").isPositive();
+            bg[0] = items.get(0).get("id").asString();
+        });
+        String req = testJson.createObjectNode().put("body", body).put("category", "curhat")
+                .put("bg_media_id", bg[0]).toString();
+        var res = send("POST", "/v1/posts", req, accessToken);
+        assertThat(res.statusCode()).as(res.body()).isEqualTo(201);
+        return testJson.readTree(res.body()).get("id").asString();
     }
 
     @AfterEach

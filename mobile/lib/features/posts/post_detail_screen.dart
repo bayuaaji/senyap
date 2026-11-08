@@ -169,7 +169,7 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
                         return PostCard(
                           post: post,
                           onHeart: _toggleHeart,
-                          onWhisper: () => openWhisper(context, type: WhisperOriginType.post, originId: post.id),
+                          onWhisper: () => openWhisper(context, type: WhisperOriginType.post, originId: post.id, excerpt: post.body),
                           onMore: post.isMine ? _deletePost : null,
                         );
                       }
@@ -196,7 +196,7 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
                       return ReplyTile(
                         reply: reply,
                         viewerIsPostAuthor: post.isMine,
-                        onWhisper: () => openWhisper(context, type: WhisperOriginType.reply, originId: reply.id),
+                        onWhisper: () => openWhisper(context, type: WhisperOriginType.reply, originId: reply.id, excerpt: reply.body),
                         onAction: (a) => _replyAction(reply, a),
                       );
                     },

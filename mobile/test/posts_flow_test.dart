@@ -13,7 +13,7 @@ void usePhoneSize(WidgetTester tester) {
 }
 
 void main() {
-  testWidgets('feed Terbaru menampilkan kartu post: alias, kota, waktu relatif, Bisik placeholder', (tester) async {
+  testWidgets('feed Terbaru menampilkan kartu post: alias, kota, waktu relatif, tombol Bisik membuka layar Bisik', (tester) async {
     usePhoneSize(tester);
     final repo = FakePostsRepository(posts: [samplePost()]);
     await pumpApp(tester, tokens: InMemoryTokenStore(testTokens), posts: repo);
@@ -26,7 +26,7 @@ void main() {
 
     await tester.tap(find.byKey(const Key('post-whisper')));
     await tester.pumpAndSettle();
-    expect(find.byKey(const Key('whisper-placeholder')), findsOneWidget);
+    expect(find.byKey(const Key('send-whisper')), findsOneWidget);
   });
 
   testWidgets('hati optimistis lalu dikirim ke server', (tester) async {
@@ -80,8 +80,9 @@ void main() {
 
     await tester.tap(find.byKey(const Key('reply-whisper')));
     await tester.pumpAndSettle();
-    expect(find.byKey(const Key('whisper-placeholder')), findsOneWidget);
-    await tester.tap(find.text('Tutup'));
+    expect(find.byKey(const Key('send-whisper')), findsOneWidget);
+    expect(find.text('"Makasih semuanya."'), findsOneWidget);
+    await tester.pageBack();
     await tester.pumpAndSettle();
 
     await tester.enterText(find.byKey(const Key('reply-input')), 'Semangat ya!');

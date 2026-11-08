@@ -242,10 +242,10 @@ class RealtimeE2EIT extends IntegrationTest {
     }
 
     private String activeConversation(User author, User whisperer) {
-        var origin = json.readTree(send("POST", "/v1/dev/origins", "{\"excerpt\":\"e2e\"}", author.token()).body());
+        String originId = createPost(author.token(), "e2e");
         var conv = json.readTree(send("POST", "/v1/conversations", """
                 {"origin_type":"POST","origin_id":"%s","first_message":"hai","client_msg_id":"%s"}"""
-                .formatted(origin.get("origin_id").asString(), UUID.randomUUID()), whisperer.token()).body());
+                .formatted(originId, UUID.randomUUID()), whisperer.token()).body());
         String id = conv.get("id").asString();
         assertThat(send("POST", "/v1/conversations/" + id + "/accept", null, author.token()).statusCode()).isEqualTo(200);
         return id;

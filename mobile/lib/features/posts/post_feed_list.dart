@@ -123,7 +123,7 @@ class _PostFeedListState extends ConsumerState<PostFeedList> with AutomaticKeepA
               post: post,
               onTap: () => _open(post),
               onHeart: () => _toggleHeart(i),
-              onWhisper: () => openWhisper(context, type: WhisperOriginType.post, originId: post.id),
+              onWhisper: () => openWhisper(context, type: WhisperOriginType.post, originId: post.id, excerpt: post.body),
             );
           },
         ),

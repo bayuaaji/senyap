@@ -351,9 +351,7 @@ class ChatIT extends IntegrationTest {
     }
 
     private String seedOrigin(User owner, String excerpt) {
-        var res = send("POST", "/v1/dev/origins", "{\"excerpt\":\"" + excerpt + "\"}", owner.token());
-        assertThat(res.statusCode()).as(res.body()).isEqualTo(201);
-        return json.readTree(res.body()).get("origin_id").asString();
+        return createPost(owner.token(), excerpt);
     }
 
     private HttpResponse<String> startRes(User u, String originId, String text, UUID cmid) {

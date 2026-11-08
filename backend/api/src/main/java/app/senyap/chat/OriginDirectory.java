@@ -7,8 +7,7 @@ import java.util.Map;
  * Port modul chat untuk validasi asal Bisik (functional spec FS-05 §5.1): post/balasan yang masih bisa
  * dibisiki + pemiliknya (= penerima). Batch, DTO record (aturan M3/M4).
  *
- * <p>Diimplementasikan modul posts (Fase 3, {@code PostsApi.findOrigins}) lewat adapter. Sampai itu digabung,
- * implementasinya SEMENTARA: {@code chat.internal.SeedOriginDirectory} (tabel {@code chat.dev_origins}).
+ * <p>Diimplementasikan adapter {@code chat.internal.PostsOriginDirectory} ke {@code PostsApi.findOrigins}.
  */
 public interface OriginDirectory {
 

@@ -18,7 +18,7 @@ Checklist rinci tiap fase ada di `docs/03-build-guide.md` §4. Centang di sana s
 
 ## Fase yang sedang berjalan
 
-**Fase 2 — Bisik / DM.** Belum dimulai. Fase 1 selesai (commit `a2bfb75`).
+**Fase 4 — Keselamatan.** Berikutnya. Fase 2 dan 3 sudah digabung ke `main` (9 Nov 2026).
 
 ## Pertanyaan terbuka
 
@@ -37,6 +37,13 @@ Tulis entri baru di paling atas dengan format ini:
 - Masalah / keputusan baru: …
 - Langkah berikutnya: …
 ```
+
+### 2026-11-09 — Merge Fase 2 + 3
+- Selesai: `fase-2-bisik` dan `fase-3-post` digabung ke `main`. Asal Bisik kini lewat adapter `chat/internal/PostsOriginDirectory` → `PostsApi.findOrigins`; `SeedOriginDirectory`, `DevSeedController`, `POST /v1/dev/origins` dihapus, tabel `chat.dev_origins` di-drop (`chat/V3`). Test Bisik membuat post sungguhan lewat `IntegrationTest.createPost`.
+- Flutter: `openWhisper` membuka `/bisik/baru?origin_type=…&origin_id=…&excerpt=…` (bukan placeholder lagi).
+- `./mvnw verify` lulus (61 unit + 48 IT + realtime/contracts, termasuk `RealtimeE2EIT`); `flutter analyze` bersih, `flutter test` 43 lulus.
+- Belum: gambar DM (Fase 2, `DmMediaService`) dan pipeline latar (Fase 3, `MediaService`) masih dua jalur terpisah di modul media — satukan bila perlu. `flutter run` di device belum dicoba.
+- Langkah berikutnya: Fase 4 (keselamatan).
 
 ### 2026-11-09 — Fase 3
 - Selesai: semua item Fase 3 di build guide §4 kecuali sambungan tombol Bisik (menunggu Fase 2). `./mvnw verify` lulus (contracts 2, api 61 unit + 33 IT, realtime 3); `flutter analyze` bersih, `flutter test` 33 lulus. Dikerjakan paralel dengan Fase 2 di worktree terpisah (`fase-3-post`, dari `5a6d692`).
