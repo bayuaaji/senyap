@@ -8,7 +8,7 @@ Diperbarui di akhir setiap sesi. Sesi baru mulai dari sini.
 |---|---|---|
 | Dokumen (requirements, spec, guide) | ✅ Selesai | 8 Nov 2026 |
 | 0 Fondasi | ✅ Selesai | 8 Nov 2026, commit `bd1c959` |
-| 1 Akun anonim | ✅ Selesai | 8 Nov 2026 (belum di-commit, menunggu review) |
+| 1 Akun anonim | ✅ Selesai | 8 Nov 2026, commit `a2bfb75` |
 | 2 Bisik / DM | ⏳ Berikutnya | |
 | 3 Post, feed, balasan | ⬜ Belum | |
 | 4 Keselamatan | ⬜ Belum | Wajib sebelum beta |
@@ -18,7 +18,7 @@ Checklist rinci tiap fase ada di `docs/03-build-guide.md` §4. Centang di sana s
 
 ## Fase yang sedang berjalan
 
-**Fase 2 — Bisik / DM.** Belum dimulai. Fase 1 selesai (belum di-commit, menunggu persetujuan user).
+**Fase 2 — Bisik / DM.** Belum dimulai. Fase 1 selesai (commit `a2bfb75`).
 
 ## Pertanyaan terbuka
 
@@ -60,7 +60,7 @@ Tulis entri baru di paling atas dengan format ini:
   - Push token: `verify` mengirim `push_token: null` dari mobile; registrasi lewat `PUT /v1/me/device` setelah FCM/APNs disiapkan (Fase 2). Satu push token hanya milik satu device.
   - Spec diperbarui: endpoint `PUT /v1/me/device`, `GET /v1/aliases/catalog`, JWKS, kode `OTP_INVALID`, event `user.*`.
 - Belum diverifikasi: `flutter run` di simulator/device (Xcode/Android SDK belum ada) — termasuk `flutter_secure_storage` di Keychain/Keystore dan apakah `minSdk` Android perlu dinaikkan; workflow GitHub Actions (belum ada remote).
-- Langkah berikutnya: minta user review + commit Fase 1, lalu Fase 2 (Bisik/DM, FS-05).
+- Langkah berikutnya: Fase 2 (Bisik/DM, FS-05).
 
 ### 2026-11-08 — Fase 0
 - Selesai: semua item Fase 0 di build guide §4.
