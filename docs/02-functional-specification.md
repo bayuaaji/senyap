@@ -200,11 +200,17 @@ Tabel dipartisi per bulan (`created_at`) supaya retensi dan purge murah.
 
 | Method | Path | Respons |
 |---|---|---|
-| GET | `/v1/backgrounds?category=` | Galeri latar bawaan |
-| POST | `/v1/media/uploads` | `{media_id, upload_url}` |
-| POST | `/v1/posts` | `{body, category, bg_media_id, use_location}` → 201 `{post}` |
+| GET | `/v1/backgrounds?category=&cursor=` | Galeri latar bawaan: `{items: [{id, url, blurhash}], next_cursor}` |
+| POST | `/v1/media/uploads` | `{mime_type, size_bytes}` → 201 `{media_id, upload_url, upload_method: "PUT", upload_headers, expires_at}`. JPEG/PNG, ≤ 10 MB. Client wajib mengirim `upload_headers` apa adanya saat PUT. |
+| POST | `/v1/media/{id}/complete` | 202 `{media_id, status, background}`. Setelah PUT selesai; memicu event `media.uploaded`. Idempotent. |
+| GET | `/v1/media/{id}` | `{media_id, status: PENDING_UPLOAD/PROCESSING/READY/REJECTED, background: {url, blurhash} \| null}`, hanya pemilik |
+| POST | `/v1/posts` | `{body, category, bg_media_id, use_location, geohash}` → 201 `{post}` |
 | GET | `/v1/posts/{id}` | Post + `is_mine` |
 | DELETE | `/v1/posts/{id}` | 204, hanya pembuat |
+
+- `bg_media_id`: latar galeri bawaan, atau upload sendiri yang sudah `READY` **milik pembuat post**. Selain itu `VALIDATION_FAILED`.
+- Lokasi: device menghitung geohash (≥ 5 karakter) dan mengirimnya sebagai `geohash` bila `use_location = true`; server memotong ke 5 karakter dan menentukan `city` dari kota terdekat (≤ 35 km). Server tidak pernah menerima lat/lng. `geohash` tidak pernah dikirim balik ke client.
+- Pipeline (Fase 3): Java murni (ImageIO). Original dihapus setelah versi aman (`public/bg/{id}.jpg`, JPEG tanpa metadata) jadi, karena bisa memuat EXIF/GPS. Moderasi gambar otomatis menyusul di FS-08.
 
 ### FS-03 Feed [MVP]
 
@@ -227,7 +233,7 @@ Semua feed bersifat *pull* dari index yang sama untuk semua orang, lalu di-cache
 |---|---|
 | GET | `/v1/feed/latest?cursor=` |
 | GET | `/v1/feed/popular?cursor=` |
-| GET | `/v1/feed/nearby?cursor=` |
+| GET | `/v1/feed/nearby?cell={geohash}&cursor=` (`cell` dihitung device, ≥ 5 karakter) |
 | GET | `/v1/feed/category/{slug}?cursor=` |
 | GET | `/v1/me/posts?cursor=` (post sendiri, hanya terlihat oleh diri sendiri) |
 
@@ -241,10 +247,14 @@ Semua feed bersifat *pull* dari index yang sama untuk semua orang, lalu di-cache
 
 | Method | Path | Respons |
 |---|---|---|
-| GET | `/v1/posts/{id}/replies?cursor=` | `{items: [{id, author: {public_id, name, tag, color, is_post_author}, body, created_at, is_mine}]}` |
-| POST | `/v1/posts/{id}/replies` | 201 |
-| DELETE | `/v1/replies/{id}` | 204 |
+| GET | `/v1/posts/{id}/replies?cursor=` | `{items: [{id, post_id, author: {public_id, name, tag, color, is_post_author}, body, created_at, is_mine, can_whisper, is_hidden}], next_cursor}` |
+| POST | `/v1/posts/{id}/replies` | 201 `{reply}` |
+| DELETE | `/v1/replies/{id}` | 204, hanya penulis balasan |
+| PUT / DELETE | `/v1/replies/{id}/hidden` | 204, hanya pembuat post: sembunyikan / tampilkan lagi. Balasan tersembunyi hanya terlihat oleh pembuat post dan penulisnya (`is_hidden: true`), tidak dihitung di `reply_count`, dan tidak bisa jadi asal Bisik. |
 | PUT / DELETE | `/v1/posts/{id}/heart` | 204 |
+
+- Akun penulis di-purge (`user.purged`): post-nya dihapus; balasannya menjadi `body: "[dihapus]"` dengan `author: {public_id: null, name: "[dihapus]"}`.
+- Asal Bisik untuk modul chat: `PostsApi.findOrigins(List<OriginRef>)` (batch, M3/M4) mengembalikan pemilik post/balasan yang masih `PUBLIC`, belum dihapus, belum disembunyikan, dan post-nya juga masih bisa dibisiki. Asal lain → `NOT_FOUND`.
 
 ### FS-05 Bisik: DM anonim [MVP] ★ fitur inti
 
@@ -489,7 +499,7 @@ pesan DM, inbox, dan notifikasi.
 | `CONVERSATION_PENDING` | 409 | Kirim pesan sebelum request Bisik diterima |
 | `RETRACT_EXPIRED` | 409 | Tarik pesan lebih dari 10 menit setelah dikirim |
 | `WHISPER_QUOTA_EXCEEDED` | 429 | Kuota request Bisik harian habis (§6), dengan `Retry-After` |
-| `RATE_LIMITED` / `*_QUOTA_EXCEEDED` | 429 | Dengan header `Retry-After` |
+| `RATE_LIMITED` / `*_QUOTA_EXCEEDED` | 429 | Dengan header `Retry-After`. Kuota harian §6: `POST_QUOTA_EXCEEDED`, `REPLY_QUOTA_EXCEEDED`, `UPLOAD_QUOTA_EXCEEDED` |
 
 > Kalau target memblokir pengirim, server mengembalikan `NOT_FOUND`, **bukan** `BLOCKED`.
 > Dengan begitu pengirim tidak tahu dirinya diblokir.

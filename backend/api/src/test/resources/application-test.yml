@@ -22,6 +22,9 @@ senyap:
     datasource:
       password: test_identity_pw
   media:
+    gallery-per-category: 2
+    sweep-interval: 2s
+    stale-processing-after: 5s
     s3:
       create-bucket: true
     datasource:

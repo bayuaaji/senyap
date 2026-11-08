@@ -76,6 +76,11 @@ senyap:
       username: senyap_identity
       password: ${SENYAP_DB_IDENTITY_PASSWORD:}
   media:
+    # URL dasar objek publik (public/…); produksi = CDN. Lokal: bucket MinIO dengan policy baca publik untuk public/*.
+    public-base-url: ${SENYAP_MEDIA_PUBLIC_URL:http://localhost:9000/media}
+    # Placeholder generatif untuk galeri bawaan (aset final belum ada). Matikan setelah aset final diimpor.
+    gallery-seed: ${SENYAP_MEDIA_GALLERY_SEED:true}
+    gallery-per-category: 300
     s3:
       endpoint: ${SENYAP_S3_ENDPOINT:http://localhost:9000}
       region: ${SENYAP_S3_REGION:us-east-1}

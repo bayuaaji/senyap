@@ -9,8 +9,8 @@ Diperbarui di akhir setiap sesi. Sesi baru mulai dari sini.
 | Dokumen (requirements, spec, guide) | ✅ Selesai | 8 Nov 2026 |
 | 0 Fondasi | ✅ Selesai | 8 Nov 2026, commit `bd1c959` |
 | 1 Akun anonim | ✅ Selesai | 8 Nov 2026, commit `a2bfb75` |
-| 2 Bisik / DM | ✅ Selesai (belum di-commit) | 9 Nov 2026, branch `fase-2-bisik`; menunggu review + merge dengan Fase 3 |
-| 3 Post, feed, balasan | ⬜ Belum | |
+| 2 Bisik / DM | ✅ Selesai | 9 Nov 2026, digabung ke `main` bersama Fase 3 |
+| 3 Post, feed, balasan | ✅ Selesai | 9 Nov 2026, digabung ke `main`; tombol Bisik tersambung |
 | 4 Keselamatan | ⬜ Belum | Wajib sebelum beta |
 | 5 Siap produksi | ⬜ Belum | |
 
@@ -37,6 +37,30 @@ Tulis entri baru di paling atas dengan format ini:
 - Masalah / keputusan baru: …
 - Langkah berikutnya: …
 ```
+
+### 2026-11-09 — Fase 3
+- Selesai: semua item Fase 3 di build guide §4 kecuali sambungan tombol Bisik (menunggu Fase 2). `./mvnw verify` lulus (contracts 2, api 61 unit + 33 IT, realtime 3); `flutter analyze` bersih, `flutter test` 33 lulus. Dikerjakan paralel dengan Fase 2 di worktree terpisah (`fase-3-post`, dari `5a6d692`).
+  - **media**: `MediaApi.findBackgrounds` + `Background`. Presigned PUT (JPEG/PNG ≤ 10 MB, content-type + length ditandatangani) → `POST /v1/media/{id}/complete` (HEAD objek, outbox `media.uploaded`) → `MediaWorker` (Kafka consumer + sweeper PROCESSING macet) → `ImagePipeline`: magic bytes, cek dimensi sebelum decode (bom dekompresi), orientasi EXIF, resize 1080, blur 3 px, overlay 35%, JPEG ulang tanpa metadata, BlurHash 4×3, dHash 64-bit → `READY`/`REJECTED`; original dihapus. `GET /v1/media/{id}`, `GET /v1/backgrounds`. `GallerySeeder` (worker) mengisi galeri bawaan. Migrasi `media/V2`. Lokal/test: bucket policy baca publik untuk `public/*` (dipasang app bila `create-bucket=true`).
+  - **posts**: `PostsApi` (`findOrigins`, `feedPostIds`, `hotCandidates`, `renderPosts`) + DTO. Post buat/lihat/hapus/`/v1/me/posts`; lokasi = geohash dari device → `Geohash` (5 karakter, 8 tetangga) + `CityLookup` (±75 kota, ≤ 35 km). Balasan (lencana Penulis, sembunyikan oleh pembuat post `PUT/DELETE /v1/replies/{id}/hidden`). Hati idempotent: baris `hearts` sinkron, `heart_count` lewat delta Redis `posts:heart_delta` + flush worker 2 dtk. `PostsWorker`: hot_score tiap 1 menit (jendela 72 jam), consumer `user.purged` (post dihapus, balasan jadi "[dihapus]", idempotent via `consumed_events`). Kuota §6 post/balasan/upload (akun baru < 24 jam dibaca dari TSID user ID). Migrasi `posts/V2`.
+  - **feed**: pull tanpa fan-out; cache daftar ID halaman pertama 15 dtk per feed (Sekitar per sel), render per viewer lewat `PostsApi`. Populer = zset `feed:hot` dibangun ulang worker tiap menit (`PopularFeedJob`), cursor (skor, id).
+  - **IT**: `PostFeedReplyIT` (skenario A post → B lihat di Terbaru/Sekitar/Kategori/Populer → balas → alias + Penulis → `findOrigins` → hati → sembunyikan → hapus; validasi; kuota; paginasi cursor), `MediaUploadIT` (upload → READY → dipakai post; file palsu REJECTED; kuota). Unit: `GeohashTest`, `ImagePipelineTest`.
+  - **mobile**: `features/posts` (model, `PostsRepository` Dio termasuk upload presigned + polling, `PostCard` teks di atas latar + `BlurHashBox` dekoder sendiri, `PostFeedList` cursor + tarik muat ulang, `PostDetailScreen` balasan + lencana Penulis + sembunyikan/hapus), `feed_screen` (tab Terbaru/Populer/Sekitar/Kategori; lokasi hanya diminta saat diketuk), `compose_screen` (editor + pratinjau, kategori, galeri latar, upload foto, toggle kota), `core/time/relative_time.dart` (§4.1, diperbarui tiap menit/jam), `core/geo/geohash.dart`, `whisper/whisper_entry.dart` (placeholder Bisik). Route `/post/:id`. Package baru: `image_picker`, `geolocator` (+ izin `NSLocationWhenInUseUsageDescription`, `NSPhotoLibraryUsageDescription`, `ACCESS_COARSE_LOCATION`).
+- Sedang dikerjakan / setengah jadi: tombol Bisik membuka placeholder (`mobile/lib/features/whisper/whisper_entry.dart`, `openWhisper`).
+- **Sambungan saat merge Fase 2:**
+  - Modul chat memanggil `PostsApi.findOrigins(List<OriginRef>)` (`OriginType` POST/REPLY = nilai `chat.conversations.origin_type`); asal yang tidak ada di hasil → `NOT_FOUND`; tolak Bisik ke diri sendiri (`ownerUserId == initiator`); block dicek Fase 4. `WhisperOrigin.excerpt` (≤ 80 karakter) untuk konteks layar request.
+  - Flutter: ganti isi `openWhisper(context, type, originId)` dengan navigasi ke layar request Bisik. Tombol muncul bila `can_whisper` (post dan balasan).
+  - File bersama yang diubah fase ini (semua menambah): `backend/api/src/main/resources/application.yml` (`senyap.media.public-base-url`, `gallery-seed`, `gallery-per-category`), `application-test.yml`, `support/IntegrationTest.java` (+1 baris), `mobile/lib/app/router.dart` (+route `/post/:id`), `mobile/pubspec.yaml`/`pubspec.lock` (+2 package), `test/support/fakes.dart` (+override repo post/lokasi/picker), Info.plist, AndroidManifest. Tidak menyentuh chat/notifications/realtime/`ErrorCode`/contracts.
+- Masalah / keputusan baru:
+  - **Pipeline gambar Java murni (ImageIO), bukan libvips**: tanpa library native di container; volume upload MVP kecil. Input hanya JPEG/PNG (image_picker meng-encode ulang HEIC → JPEG). Ganti `ImagePipeline` bila CPU worker jadi bottleneck.
+  - **Galeri bawaan = placeholder generatif** (`GalleryArt`, gradien + lingkaran, deterministik). **Aset final berlisensi (±300/kategori) belum disiapkan**; matikan `senyap.media.gallery-seed` setelah diimpor.
+  - **Lokasi**: server hanya menerima geohash dari device, tidak pernah lat/lng; `geohash` tidak dikirim balik. Feed Sekitar memakai query `cell` (sel ±5 km ikut tercatat di access log — terima, atau pindah ke header di Fase 5).
+  - Urutan + cursor feed memakai ID TSID (setara `created_at`), index parsial baru di `posts/V2`.
+  - Kuota "trust rendah" (§6) belum diterapkan: butuh trust score (Fase 4).
+  - Balasan yang disembunyikan pembuat post: kolom terpisah `hidden_by_post_author_at` (bukan `visibility`) supaya tidak tertukar dengan tindakan moderator; tidak dihitung di `reply_count`.
+  - Endpoint/kode baru dicatat di functional spec FS-02/03/04 + §4.
+- Belum diverifikasi: `flutter run` di simulator/device (termasuk izin lokasi/foto, upload presigned dari device ke MinIO lokal — emulator Android perlu `SENYAP_MEDIA_PUBLIC_URL`/endpoint S3 `10.0.2.2`, bukan `localhost`); belum dicoba manual dengan `spring-boot:run` (port Fase 3 bila paralel: 8280/8282).
+- Lubang yang diketahui (tindak lanjut): filter blokir di feed + filter teks FS-08 (Fase 4); media `PENDING_UPLOAD` yang ditinggal belum dibersihkan; delta hati di Redis hilang bila worker mati di antara RENAME dan commit (tanpa rekonsiliasi); post `AUTHOR_ONLY` milik viewer tidak muncul di feed bersama (hanya di `/v1/me/posts`) — tinjau saat shadow-restrict Fase 4; tombol Bisik.
+- Langkah berikutnya: user review + commit `fase-3-post`, merge dengan Fase 2, sambungkan `openWhisper` + `findOrigins`, lalu skenario penuh "B membuka Bisik ke A dari balasan, A menerima".
 
 ### 2026-11-09 — Fase 2
 - Selesai: semua item Fase 2 di build guide §4. `./mvnw verify` lulus (contracts 2, realtime 3, api 52 unit + 41 IT); `flutter analyze` bersih, `flutter test` 21 lulus. Belum di-commit (branch `fase-2-bisik`, worktree `../senyap-fase-2`).

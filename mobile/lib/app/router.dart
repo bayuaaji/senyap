@@ -14,6 +14,8 @@ import '../features/onboarding/otp_screen.dart';
 import '../features/onboarding/permissions_screen.dart';
 import '../features/onboarding/phone_screen.dart';
 import '../features/onboarding/welcome_screen.dart';
+import '../features/posts/post_detail_screen.dart';
+import '../features/posts/post_models.dart';
 import '../features/profile/create_profile_screen.dart';
 import '../features/settings/settings_screen.dart';
 import 'shell.dart';
@@ -36,17 +38,26 @@ abstract final class AppRoutes {
 
   /// Mulai Bisik: `/bisik/baru?origin_type=POST&origin_id=…&excerpt=…`.
   static const newWhisper = '/bisik/baru';
+
+  /// Post + balasan, di atas tab (tanpa bar navigasi bawah). `extra` boleh berisi [Post] untuk tampil instan.
+  static const post = '/post/:id';
 }
 
 /// Arah layar berdasarkan status sesi. Dipisah supaya bisa diuji tanpa widget.
 String? sessionRedirect(SessionStatus status, String location) {
   final inOnboarding = location.startsWith(AppRoutes.welcome);
   return switch (status) {
-    SessionStatus.loading => location == AppRoutes.splash ? null : AppRoutes.splash,
+    SessionStatus.loading =>
+      location == AppRoutes.splash ? null : AppRoutes.splash,
     SessionStatus.signedOut => inOnboarding ? null : AppRoutes.welcome,
-    SessionStatus.needsProfile => location == AppRoutes.createProfile ? null : AppRoutes.createProfile,
+    SessionStatus.needsProfile =>
+      location == AppRoutes.createProfile ? null : AppRoutes.createProfile,
     SessionStatus.signedIn =>
-      inOnboarding || location == AppRoutes.splash || location == AppRoutes.createProfile ? AppRoutes.feed : null,
+      inOnboarding ||
+              location == AppRoutes.splash ||
+              location == AppRoutes.createProfile
+          ? AppRoutes.feed
+          : null,
   };
 }
 
@@ -57,20 +68,33 @@ final routerProvider = Provider<GoRouter>((ref) {
   final router = GoRouter(
     initialLocation: AppRoutes.splash,
     refreshListenable: status,
-    redirect: (context, state) => sessionRedirect(status.value, state.matchedLocation),
+    redirect: (context, state) =>
+        sessionRedirect(status.value, state.matchedLocation),
     routes: [
-      GoRoute(path: AppRoutes.splash, builder: (context, state) => const _Splash()),
+      GoRoute(
+        path: AppRoutes.splash,
+        builder: (context, state) => const _Splash(),
+      ),
       GoRoute(
         path: AppRoutes.welcome,
         builder: (context, state) => const WelcomeScreen(),
         routes: [
           GoRoute(path: 'usia', builder: (context, state) => const AgeScreen()),
-          GoRoute(path: 'nomor', builder: (context, state) => const PhoneScreen()),
+          GoRoute(
+            path: 'nomor',
+            builder: (context, state) => const PhoneScreen(),
+          ),
           GoRoute(path: 'kode', builder: (context, state) => const OtpScreen()),
         ],
       ),
-      GoRoute(path: AppRoutes.createProfile, builder: (context, state) => const CreateProfileScreen()),
-      GoRoute(path: AppRoutes.permissions, builder: (context, state) => const PermissionsScreen()),
+      GoRoute(
+        path: AppRoutes.createProfile,
+        builder: (context, state) => const CreateProfileScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.permissions,
+        builder: (context, state) => const PermissionsScreen(),
+      ),
       GoRoute(
         path: AppRoutes.newWhisper,
         builder: (context, state) => NewWhisperScreen(
@@ -79,23 +103,33 @@ final routerProvider = Provider<GoRouter>((ref) {
           excerpt: state.uri.queryParameters['excerpt'],
         ),
       ),
+      GoRoute(
+        path: AppRoutes.post,
+        builder: (context, state) => PostDetailScreen(
+          postId: state.pathParameters['id']!,
+          initial: state.extra is Post ? state.extra as Post : null,
+        ),
+      ),
       StatefulShellRoute.indexedStack(
         builder: (context, state, shell) => AppShell(shell: shell),
         branches: [
           _branch(AppRoutes.feed, const FeedScreen()),
           _branch(AppRoutes.compose, const ComposeScreen()),
-          StatefulShellBranch(routes: [
-            GoRoute(
-              path: AppRoutes.messages,
-              builder: (context, state) => const MessagesScreen(),
-              routes: [
-                GoRoute(
-                  path: ':id',
-                  builder: (context, state) => ChatScreen(conversationId: state.pathParameters['id']!),
-                ),
-              ],
-            ),
-          ]),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: AppRoutes.messages,
+                builder: (context, state) => const MessagesScreen(),
+                routes: [
+                  GoRoute(
+                    path: ':id',
+                    builder: (context, state) =>
+                        ChatScreen(conversationId: state.pathParameters['id']!),
+                  ),
+                ],
+              ),
+            ],
+          ),
           _branch(AppRoutes.notifications, const NotificationsScreen()),
           _branch(AppRoutes.settings, const SettingsScreen()),
         ],
@@ -110,12 +144,13 @@ final routerProvider = Provider<GoRouter>((ref) {
 });
 
 StatefulShellBranch _branch(String path, Widget screen) => StatefulShellBranch(
-      routes: [GoRoute(path: path, builder: (context, state) => screen)],
-    );
+  routes: [GoRoute(path: path, builder: (context, state) => screen)],
+);
 
 class _Splash extends StatelessWidget {
   const _Splash();
 
   @override
-  Widget build(BuildContext context) => const Scaffold(body: Center(child: CircularProgressIndicator()));
+  Widget build(BuildContext context) =>
+      const Scaffold(body: Center(child: CircularProgressIndicator()));
 }

@@ -206,13 +206,13 @@ Kerjakan dulu dengan percakapan yang dibuat lewat seed data, karena post baru ad
 
 ### Fase 3 — Post, feed, balasan (± 2 minggu) · FS-02, FS-03, FS-04
 
-- [ ] Galeri latar bawaan (seed ±300 gambar bebas lisensi per kategori).
-- [ ] Upload latar sendiri: pipeline gambar dari transkrip + blur + overlay.
-- [ ] Post: buat, lihat, hapus. Lokasi kasar (geohash 5 + kota).
-- [ ] Feed: latest, popular (`hot_score` worker tiap 1 menit), nearby (sel + 8 tetangga), kategori.
-- [ ] Balasan dengan alias akun (pembuat post diberi lencana Penulis). Hati dengan counter terbatch.
-- [ ] Tombol **Bisik** di post dan balasan → menyambung ke Fase 2.
-- [ ] Flutter: kartu post (teks di atas gambar, blurhash saat memuat), editor post, layar balasan.
+- [x] Galeri latar bawaan (seed ±300 gambar per kategori). Sementara placeholder generatif buatan sendiri; aset final berlisensi belum ada.
+- [x] Upload latar sendiri: pipeline gambar dari transkrip + blur + overlay.
+- [x] Post: buat, lihat, hapus. Lokasi kasar (geohash 5 + kota).
+- [x] Feed: latest, popular (`hot_score` worker tiap 1 menit), nearby (sel + 8 tetangga), kategori.
+- [x] Balasan dengan alias akun (pembuat post diberi lencana Penulis). Hati dengan counter terbatch.
+- [ ] Tombol **Bisik** di post dan balasan → menyambung ke Fase 2. (Tombol + `PostsApi.findOrigins` sudah ada; navigasi ke layar Bisik disambung saat merge Fase 2.)
+- [x] Flutter: kartu post (teks di atas gambar, blurhash saat memuat), editor post, layar balasan.
 
 **Selesai jika:** user A membuat post, user B melihatnya di Terbaru dan Sekitar, membalas, lalu
 membuka Bisik ke A dari balasan itu, dan A menerimanya.

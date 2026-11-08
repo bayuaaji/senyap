@@ -14,6 +14,7 @@ import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.S3Configuration;
 import software.amazon.awssdk.services.s3.model.NoSuchBucketException;
+import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 
 @Configuration(proxyBeanMethods = false)
 class MediaStorageConfig {
@@ -38,8 +39,30 @@ class MediaStorageConfig {
                 client.createBucket(b -> b.bucket(props.bucket()));
                 log.info("Bucket media {} dibuat", props.bucket());
             }
+            // Lokal/test saja: objek di bawah public/ (hasil pipeline + galeri) bisa dibaca tanpa login,
+            // seperti CDN di produksi. Original upload (uploads/) tetap privat.
+            client.putBucketPolicy(b -> b.bucket(props.bucket()).policy(publicReadPolicy(props.bucket())));
         }
         return client;
+    }
+
+    @Bean(destroyMethod = "close")
+    S3Presigner mediaS3Presigner(MediaStorageProperties props) {
+        var builder = S3Presigner.builder()
+                .region(Region.of(props.region()))
+                .credentialsProvider(StaticCredentialsProvider.create(
+                        AwsBasicCredentials.create(props.accessKey(), props.secretKey())))
+                .serviceConfiguration(S3Configuration.builder().pathStyleAccessEnabled(props.pathStyle()).build());
+        if (props.endpoint() != null && !props.endpoint().isBlank()) {
+            builder.endpointOverride(URI.create(props.endpoint()));
+        }
+        return builder.build();
+    }
+
+    static String publicReadPolicy(String bucket) {
+        return """
+                {"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"AWS":["*"]},\
+                "Action":["s3:GetObject"],"Resource":["arn:aws:s3:::%s/public/*"]}]}""".formatted(bucket);
     }
 
     @Bean
