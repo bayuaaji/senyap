@@ -11,14 +11,14 @@ Diperbarui di akhir setiap sesi. Sesi baru mulai dari sini.
 | 1 Akun anonim | ✅ Selesai | 8 Nov 2026, commit `a2bfb75` |
 | 2 Bisik / DM | ✅ Selesai | 9 Nov 2026, digabung ke `main` bersama Fase 3 |
 | 3 Post, feed, balasan | ✅ Selesai | 9 Nov 2026, digabung ke `main`; tombol Bisik tersambung |
-| 4 Keselamatan | ✅ Selesai | 9 Nov 2026, branch `fase-4-keselamatan` (belum di-merge); penyedia moderasi, hotline, penanggung jawab P0, review hukum menunggu user |
-| 5 Siap produksi | 🟡 Kode selesai | 9 Nov 2026, branch `fase-5-produksi`; load test penuh, kepatuhan, beta menunggu staging/user |
+| 4 Keselamatan | ✅ Selesai | 9 Nov 2026, digabung ke `main`; penyedia moderasi, hotline, penanggung jawab P0, review hukum menunggu user |
+| 5 Siap produksi | 🟡 Kode selesai | 9 Nov 2026, digabung ke `main` (belum di-push); load test penuh, kepatuhan, beta menunggu staging/user |
 
 Checklist rinci tiap fase ada di `docs/03-build-guide.md` §4. Centang di sana saat item selesai.
 
 ## Fase yang sedang berjalan
 
-**Fase 5 — Siap produksi.** Dikerjakan di branch `fase-5-produksi` (dari commit Fase 4), worktree `../senyap-fase-4`.
+**Fase 5 — Siap produksi.** Kode digabung ke `main` (9 Nov 2026). Sisa: staging, load test penuh, kepatuhan, beta (`docs/06-checklist-kepatuhan-dan-beta.md`).
 
 ## Pertanyaan terbuka
 
@@ -51,7 +51,7 @@ Tulis entri baru di paling atas dengan format ini:
 - Keputusan baru: Kustomize (bukan Helm); metrik di port management terpisah (`MANAGEMENT_SERVER_PORT=9464`, tidak lewat ingress); `SENYAP_FORWARD_HEADERS=native` di belakang LB (rate limit per IP); trace sampling 10% produksi / 100% staging.
 - Verifikasi: `./mvnw verify` penuh LULUS (130 test: contracts, realtime termasuk `GatewayDrainTest`, api 61 unit + IT termasuk `ProductionReadinessIT`); `flutter analyze` bersih, `flutter test` 48 lulus; load test kecil lulus (di atas).
 - Belum / tidak bisa di sini: load test skala penuh (butuh staging + beberapa generator); apply ke cluster nyata; restore PITR; kepatuhan hukum; TestFlight/Play Console. Ekspor Prometheus tidak diuji di IT (Spring Boot mematikan ekspor di test) — terbukti di run lokal k6. Profil compose `observability` (Grafana/Tempo) belum pernah dinyalakan.
-- Langkah berikutnya: user review + keputusan di `docs/06-…` §1; merge `fase-4-keselamatan` lalu `fase-5-produksi` ke `main`; siapkan staging.
+- Langkah berikutnya: keputusan user di `docs/06-…` §1; push `main`; siapkan staging.
 
 ### 2026-11-09 — Fase 4 (penyelesaian)
 - Selesai: Flutter safety di-analyze + diuji; `assets/legal/` terdaftar di pubspec; `settings/legal_screen.dart` (pembaca Markdown sederhana tanpa package) dan `settings/blocks_screen.dart` (daftar + buka blokir) di Pengaturan; `FakeSafetyRepository` di `test/support/fakes.dart`; `test/safety_flow_test.dart` (laporkan → tawaran blokir → post hilang dari feed; blokir → buka blokir di Pengaturan; buka dokumen legal). `docs/05-prosedur-eskalasi-p0.md` (draf, bagian `[ISI]` untuk user). Spec FS-07/§5 diperbarui (`/v1/support/self-harm`, `support_card`, `seq` report MESSAGE, 403 SUSPENDED, event `media.rejected`/`user.sanctioned`). Checklist Fase 4 di build guide dicentang (dengan catatan apa yang masih mock).
