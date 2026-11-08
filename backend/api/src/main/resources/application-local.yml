@@ -1,0 +1,33 @@
+# Profil local: infra dari infra/docker-compose.yml. Jangan pakai kredensial ini di luar laptop.
+senyap:
+  db:
+    bootstrap:
+      enabled: true
+      url: jdbc:postgresql://localhost:5432/senyap
+      username: senyap_admin
+      password: senyap_admin
+  auth:
+    otp:
+      mock-code: "000000"
+    datasource:
+      password: local_auth_pw
+  identity:
+    datasource:
+      password: local_identity_pw
+  media:
+    s3:
+      create-bucket: true
+    datasource:
+      password: local_media_pw
+  posts:
+    datasource:
+      password: local_posts_pw
+  chat:
+    datasource:
+      password: local_chat_pw
+  notifications:
+    datasource:
+      password: local_notifications_pw
+  safety:
+    datasource:
+      password: local_safety_pw

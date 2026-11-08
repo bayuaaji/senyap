@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://senyap.app/contracts/events/envelope.v1.schema.json",
+  "title": "EventEnvelope v1",
+  "type": "object",
+  "required": ["event_id", "type", "version", "occurred_at", "payload"],
+  "additionalProperties": false,
+  "properties": {
+    "event_id": { "type": "string", "format": "uuid" },
+    "type": { "type": "string", "pattern": "^[a-z]+\\.[a-z_.]+$" },
+    "version": { "type": "integer", "minimum": 1 },
+    "occurred_at": { "type": "string", "format": "date-time" },
+    "payload": {
+      "type": "object",
+      "not": { "anyOf": [{ "required": ["body"] }, { "required": ["phone"] }] }
+    }
+  }
+}

@@ -1,0 +1,73 @@
+# Lingkungan lokal Senyap. Mock OTP tidak butuh container: profil Spring `local`
+# selalu menerima kode 000000.
+name: senyap
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: senyap
+      POSTGRES_USER: senyap_admin
+      POSTGRES_PASSWORD: senyap_admin
+    ports: ["5432:5432"]
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U senyap_admin -d senyap"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    ports: ["6379:6379"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redpanda:
+    image: redpandadata/redpanda:v24.3.18
+    command:
+      - redpanda
+      - start
+      - --mode=dev-container
+      - --smp=1
+      - --memory=512M
+      - --overprovisioned
+      - --kafka-addr=internal://0.0.0.0:9092,external://0.0.0.0:19092
+      - --advertise-kafka-addr=internal://redpanda:9092,external://localhost:19092
+    ports: ["19092:19092", "9644:9644"]
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster health | grep -E 'Healthy:.+true' || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  # Image resmi minio/minio tidak lagi tersedia publik; Chainguard menyediakan build MinIO
+  # yang sama (hanya tag `latest` gratis). Entrypoint-nya /usr/bin/minio.
+  minio:
+    image: cgr.dev/chainguard/minio:latest
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: senyap
+      MINIO_ROOT_PASSWORD: senyap-minio
+    ports: ["9000:9000", "9001:9001"]
+    volumes: [miniodata:/data]
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/9000 && printf 'GET /minio/health/live HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && read -r status <&3 && [[ $$status == *' 200 '* ]]"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # Membuat bucket `media` sekali lalu keluar (memakai mc yang ada di image yang sama).
+  minio-init:
+    image: cgr.dev/chainguard/minio:latest
+    depends_on:
+      minio: { condition: service_healthy }
+    entrypoint: ["sh", "-c", "mc alias set local http://minio:9000 senyap senyap-minio && mc mb --ignore-existing local/media"]
+    restart: "no"
+
+volumes:
+  pgdata:
+  miniodata:

@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://senyap.app/contracts/ws/frame.v1.schema.json",
+  "title": "WebSocket frame v1",
+  "type": "object",
+  "required": ["t", "d"],
+  "additionalProperties": false,
+  "properties": {
+    "t": {
+      "enum": ["msg.send", "msg.delivered", "msg.read", "typing", "ping",
+               "msg.ack", "msg.new", "msg.status", "msg.retracted", "conv.updated", "error", "pong"]
+    },
+    "id": { "type": "string", "maxLength": 64 },
+    "d": { "type": "object" }
+  }
+}

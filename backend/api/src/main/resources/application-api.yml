@@ -1,0 +1,4 @@
+# Profil api: melayani HTTP publik /v1/**.
+senyap:
+  api:
+    enabled: true

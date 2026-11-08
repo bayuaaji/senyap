@@ -1,0 +1,103 @@
+# Konfigurasi dasar. Profil: local (dev), test, api (HTTP publik), worker (relay + job).
+spring:
+  application:
+    name: senyap-api
+  profiles:
+    # `./mvnw -pl api spring-boot:run` tanpa argumen = lokal, API + worker dalam satu proses.
+    default: local,api,worker
+  threads:
+    virtual:
+      enabled: true
+  autoconfigure:
+    # Tiap modul punya DataSource + Flyway sendiri (M1, M7), jadi auto-config tunggal dimatikan.
+    exclude:
+      - org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration
+      - org.springframework.boot.jdbc.autoconfigure.DataSourceTransactionManagerAutoConfiguration
+      - org.springframework.boot.flyway.autoconfigure.FlywayAutoConfiguration
+  data:
+    redis:
+      host: ${SENYAP_REDIS_HOST:localhost}
+      port: ${SENYAP_REDIS_PORT:6379}
+  kafka:
+    bootstrap-servers: ${SENYAP_KAFKA_BOOTSTRAP:localhost:19092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      acks: all
+      properties:
+        enable.idempotence: true
+    consumer:
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+
+server:
+  port: ${SENYAP_API_PORT:8180}
+  shutdown: graceful
+  error:
+    whitelabel:
+      enabled: false
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: always
+      probes:
+        enabled: true
+
+senyap:
+  api:
+    enabled: false
+  worker:
+    enabled: false
+  db:
+    bootstrap:
+      enabled: false
+  auth:
+    datasource:
+      url: ${SENYAP_DB_URL:jdbc:postgresql://localhost:5432/senyap}
+      username: senyap_auth
+      password: ${SENYAP_DB_AUTH_PASSWORD:}
+  identity:
+    datasource:
+      url: ${SENYAP_DB_URL:jdbc:postgresql://localhost:5432/senyap}
+      username: senyap_identity
+      password: ${SENYAP_DB_IDENTITY_PASSWORD:}
+  media:
+    s3:
+      endpoint: ${SENYAP_S3_ENDPOINT:http://localhost:9000}
+      region: ${SENYAP_S3_REGION:us-east-1}
+      access-key: ${SENYAP_S3_ACCESS_KEY:senyap}
+      secret-key: ${SENYAP_S3_SECRET_KEY:senyap-minio}
+      bucket: ${SENYAP_S3_BUCKET:media}
+      path-style: true
+      create-bucket: false
+    datasource:
+      url: ${SENYAP_DB_URL:jdbc:postgresql://localhost:5432/senyap}
+      username: senyap_media
+      password: ${SENYAP_DB_MEDIA_PASSWORD:}
+  posts:
+    datasource:
+      url: ${SENYAP_DB_URL:jdbc:postgresql://localhost:5432/senyap}
+      username: senyap_posts
+      password: ${SENYAP_DB_POSTS_PASSWORD:}
+  chat:
+    datasource:
+      url: ${SENYAP_DB_URL:jdbc:postgresql://localhost:5432/senyap}
+      username: senyap_chat
+      password: ${SENYAP_DB_CHAT_PASSWORD:}
+  notifications:
+    datasource:
+      url: ${SENYAP_DB_URL:jdbc:postgresql://localhost:5432/senyap}
+      username: senyap_notifications
+      password: ${SENYAP_DB_NOTIFICATIONS_PASSWORD:}
+  safety:
+    datasource:
+      url: ${SENYAP_DB_URL:jdbc:postgresql://localhost:5432/senyap}
+      username: senyap_safety
+      password: ${SENYAP_DB_SAFETY_PASSWORD:}

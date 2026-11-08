@@ -1,0 +1,17 @@
+spring:
+  application:
+    name: senyap-realtime
+
+server:
+  port: ${SENYAP_RT_PORT:8190}
+  shutdown: graceful
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true

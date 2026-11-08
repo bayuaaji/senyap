@@ -1,0 +1,5 @@
+# Profil worker: relay outbox per modul, job terjadwal (partisi chat), consumer event.
+# Kalau dijalankan terpisah dari api, pakai port lain: SENYAP_API_PORT=8182.
+senyap:
+  worker:
+    enabled: true
