@@ -13,7 +13,7 @@ import tools.jackson.databind.json.JsonMapper;
 
 /**
  * Endpoint {@code /v1/ws}. Fase 0: hanya heartbeat ({@code ping} → {@code pong}); frame lain dijawab
- * {@code error} {@code NOT_IMPLEMENTED}. Autentikasi token, routing pesan, dan presence menyusul di Fase 2.
+ * {@code error} {@code NOT_IMPLEMENTED}. Handshake sudah wajib access token (Fase 1, {@code HandshakeAuthFilter}); routing pesan dan presence menyusul di Fase 2.
  * Isi frame tidak pernah ditulis ke log (bisa berisi pesan DM).
  */
 @Component

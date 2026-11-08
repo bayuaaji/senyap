@@ -69,9 +69,23 @@ public abstract class IntegrationTest {
     private final HttpClient http = HttpClient.newHttpClient();
 
     protected HttpResponse<String> get(String path) {
+        return send("GET", path, null, null);
+    }
+
+    /**
+     * Request JSON. {@code body} null = tanpa body; {@code accessToken} null = tanpa header Authorization.
+     */
+    protected HttpResponse<String> send(String method, String path, String body, String accessToken) {
+        var builder = HttpRequest.newBuilder(URI.create("http://localhost:" + port + path))
+                .method(method, body == null ? HttpRequest.BodyPublishers.noBody() : HttpRequest.BodyPublishers.ofString(body));
+        if (body != null) {
+            builder.header("Content-Type", "application/json");
+        }
+        if (accessToken != null) {
+            builder.header("Authorization", "Bearer " + accessToken);
+        }
         try {
-            return http.send(HttpRequest.newBuilder(URI.create("http://localhost:" + port + path)).GET().build(),
-                    HttpResponse.BodyHandlers.ofString());
+            return http.send(builder.build(), HttpResponse.BodyHandlers.ofString());
         } catch (IOException e) {
             throw new IllegalStateException(e);
         } catch (InterruptedException e) {

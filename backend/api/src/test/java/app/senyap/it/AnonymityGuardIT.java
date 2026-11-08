@@ -50,13 +50,14 @@ class AnonymityGuardIT extends IntegrationTest {
     @Test
     void endpointYangAdaTidakMembocorkanIdentitas() {
         assertThat(get("/actuator/health").statusCode()).isEqualTo(200);
-        assertThat(get("/v1/tidak-ada").statusCode()).isEqualTo(404);
+        assertThat(get("/tidak-ada").statusCode()).isEqualTo(404);
+        assertThat(get("/v1/tidak-ada").statusCode()).isEqualTo(401); // /v1/** wajib token
         // Pemeriksaan sebenarnya ada di IntegrationTest#penjagaAnonimitas (@AfterEach).
     }
 
     @Test
     void errorMemakaiFormatStandarDenganRequestId() {
-        var res = get("/v1/tidak-ada");
+        var res = get("/tidak-ada");
         String requestId = res.headers().firstValue(RequestIdFilter.HEADER).orElseThrow();
         assertThat(res.statusCode()).isEqualTo(404);
         assertThat(res.body()).isEqualTo(

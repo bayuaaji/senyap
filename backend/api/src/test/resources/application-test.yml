@@ -8,11 +8,17 @@ senyap:
       username: senyap_admin
       password: senyap_admin
   auth:
+    phone-pepper: test-pepper-hanya-untuk-integration-test-0001
+    ephemeral-signing-key: true
     otp:
       mock-code: "000000"
+      # Semua request IT datang dari 127.0.0.1; batas per IP diuji lewat RateLimiter langsung.
+      per-ip-per-hour: 100000
+      verify-per-ip-per-hour: 100000
     datasource:
       password: test_auth_pw
   identity:
+    purge-interval: 1s
     datasource:
       password: test_identity_pw
   media:

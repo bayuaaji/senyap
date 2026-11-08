@@ -15,3 +15,8 @@ management:
     health:
       probes:
         enabled: true
+
+senyap:
+  rt:
+    # JWKS publik api untuk verifikasi access token saat handshake (aturan M12).
+    jwks-uri: ${SENYAP_JWKS_URI:http://localhost:8180/.well-known/jwks.json}

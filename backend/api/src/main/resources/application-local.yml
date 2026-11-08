@@ -7,6 +7,9 @@ senyap:
       username: senyap_admin
       password: senyap_admin
   auth:
+    # Hanya untuk laptop. Produksi: SENYAP_AUTH_PHONE_PEPPER + SENYAP_AUTH_SIGNING_JWK dari KMS.
+    phone-pepper: local-dev-pepper-jangan-dipakai-di-produksi-0001
+    ephemeral-signing-key: true
     otp:
       mock-code: "000000"
     datasource:

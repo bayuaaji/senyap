@@ -174,12 +174,12 @@ produk dan bagian paling sulit secara teknis.
 
 ### Fase 1 — Akun anonim (± 1 minggu) · FS-01
 
-- [ ] OTP: request, verify, rate limit per nomor dan per IP.
-- [ ] `phone_hmac` dengan pepper dari env/KMS. Nomor asli tidak pernah ditulis ke DB atau log.
-- [ ] JWT + refresh token terikat device. Registrasi push token.
-- [ ] Modul `identity`: `public_id`, generator alias (`{hewan} {warna} #tag`, unik global), suggest → simpan, batas ganti 7 hari, `alias_history`.
-- [ ] Hapus akun: tandai `DELETED`, lalu job purge (post, balasan, pesan milik user di-anonimkan menjadi "[dihapus]").
-- [ ] Flutter: layar pembuka anonimitas, konfirmasi usia, OTP, layar buat profil (alias + "Acak lagi"), pengaturan profil (ganti alias), izin.
+- [x] OTP: request, verify, rate limit per nomor dan per IP.
+- [x] `phone_hmac` dengan pepper dari env/KMS. Nomor asli tidak pernah ditulis ke DB atau log.
+- [x] JWT + refresh token terikat device. Registrasi push token.
+- [x] Modul `identity`: `public_id`, generator alias (`{hewan} {warna} #tag`, unik global), suggest → simpan, batas ganti 7 hari, `alias_history`.
+- [x] Hapus akun: tandai `DELETED`, lalu job purge (post, balasan, pesan milik user di-anonimkan menjadi "[dihapus]"). *Fase 1: purge memutus nomor HP + event `user.purged`; consumer anonimisasi konten dibuat bersama modul posts/chat (Fase 2/3).*
+- [x] Flutter: layar pembuka anonimitas, konfirmasi usia, OTP, layar buat profil (alias + "Acak lagi"), pengaturan profil (ganti alias), izin. *Layar izin baru penjelasan; permintaan izin OS menyusul bersama push (Fase 2) dan feed Sekitar (Fase 3).*
 
 **Selesai jika:** register → login di device lain → refresh → hapus akun, semuanya lulus test integrasi.
 

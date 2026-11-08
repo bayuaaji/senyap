@@ -27,6 +27,11 @@ public class ApiException extends RuntimeException {
         this.retryAfter = retryAfter;
     }
 
+    /** Error dengan header {@code Retry-After}, misalnya {@code ALIAS_CHANGE_TOO_SOON}. */
+    public static ApiException withRetryAfter(ErrorCode code, Duration retryAfter) {
+        return new ApiException(code.name(), code.status(), code.defaultMessage(), retryAfter);
+    }
+
     public static ApiException rateLimited(Duration retryAfter) {
         return new ApiException(ErrorCode.RATE_LIMITED.name(), ErrorCode.RATE_LIMITED.status(),
                 ErrorCode.RATE_LIMITED.defaultMessage(), retryAfter);

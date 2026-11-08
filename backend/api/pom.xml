@@ -59,6 +59,14 @@
             <groupId>software.amazon.awssdk</groupId>
             <artifactId>s3</artifactId>
         </dependency>
+        <dependency>
+            <groupId>com.nimbusds</groupId>
+            <artifactId>nimbus-jose-jwt</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.github.ben-manes.caffeine</groupId>
+            <artifactId>caffeine</artifactId>
+        </dependency>
 
         <!-- Spring Modulith: struktur modul + verifikasi. Event antarmodul lewat Kafka + outbox
              sendiri per schema (M5, M7), bukan event publication registry in-memory. -->

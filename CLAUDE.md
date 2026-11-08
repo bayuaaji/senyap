@@ -33,6 +33,7 @@ Dokumen:
 - **Tanpa follow graph dan fan-out.** Feed bersifat pull dari index bersama + cache pendek.
 - **DM**: request → accept sebelum chat terbuka. `seq` per percakapan dialokasikan atomik di DB. `client_msg_id` untuk idempotensi. Pesan ditulis ke DB sebelum ack.
 - **Identitas**: client tidak pernah menerima `user_id` atau nomor HP. Yang dikirim hanya `public_id` + alias. Nomor HP disimpan sebagai HMAC.
+  Termasuk di access token: `sub` = `public_id`; server menerjemahkan ke user ID lewat modul identity.
 
 ## Stack
 
@@ -73,7 +74,12 @@ cd mobile && flutter analyze && flutter test
 - Health: `curl localhost:8180/actuator/health` (detail per DataSource modul, Redis, MinIO), `curl localhost:8190/actuator/health`.
 - Satu test: `./mvnw -pl api -am test -Dtest='CursorTest' -Dsurefire.failIfNoSpecifiedTests=false`.
   Integration test (`*IT`) jalan di fase `verify` lewat failsafe: `./mvnw -pl api -am verify -Dit.test='OutboxRelayIT' -Dtest=none -Dsurefire.failIfNoSpecifiedTests=false`.
-- `flutter run` belum bisa: Xcode/Android SDK belum terpasang.
+- `flutter run` belum bisa: Xcode/Android SDK belum terpasang. Base URL API: `--dart-define=SENYAP_API_URL=...` (default `http://localhost:8180`).
+- Login lokal: OTP mock, kode selalu `000000` (profil local/test), tidak ada SMS. Contoh:
+  `curl -XPOST localhost:8180/v1/auth/otp -H 'Content-Type: application/json' -d '{"phone":"081200000001"}'`, lalu
+  `POST /v1/auth/verify` dengan `{"phone","code":"000000","device":{"platform":"ios"},"age_confirmed":true}`.
+- Produksi wajib env `SENYAP_AUTH_PHONE_PEPPER` dan `SENYAP_AUTH_SIGNING_JWK` (buat dengan `GenerateSigningKey`),
+  plus implementasi `OtpSender`; tanpa itu api gagal start. Realtime: `SENYAP_JWKS_URI`.
 
 ## Aturan kode
 
@@ -96,6 +102,9 @@ cd mobile && flutter analyze && flutter test
 - Format error: `{ "error": { "code", "message", "request_id" } }`. Kode error mengikuti functional spec §4.
 - Jangan pernah menulis isi pesan, nomor HP, atau token ke log.
 - Teks yang tampil ke user memakai Bahasa Indonesia.
+- Autentikasi: semua `/v1/**` wajib Bearer kecuali `/v1/auth/{otp,verify,refresh}` (`shared/security/BearerTokenFilter`).
+  Controller menerima `AuthenticatedUser` sebagai parameter. Rate limit: `shared/ratelimit/RateLimiter` dengan kunci
+  berupa hash/ID, bukan data pribadi mentah.
 - Setiap endpoint baru wajib lolos test penjaga anonimitas (tidak ada `user_id`/`author_id`/`sender_id` di respons): tulis integration test yang `extends IntegrationTest`, penjaganya otomatis memindai semua respons JSON.
 
 ## Hemat konteks

@@ -58,7 +58,14 @@ senyap:
   db:
     bootstrap:
       enabled: false
+  security:
+    # Kosong = verifikasi JWT memakai JWKS penerbit di proses ini (modul auth). Isi dengan URL
+    # /.well-known/jwks.json bila modul ini dijalankan terpisah dari auth (aturan M12).
+    jwks-uri: ${SENYAP_JWKS_URI:}
   auth:
+    # Rahasia dari env/KMS. Tanpa keduanya aplikasi gagal start (kecuali profil local/test).
+    phone-pepper: ${SENYAP_AUTH_PHONE_PEPPER:}
+    signing-jwk: ${SENYAP_AUTH_SIGNING_JWK:}
     datasource:
       url: ${SENYAP_DB_URL:jdbc:postgresql://localhost:5432/senyap}
       username: senyap_auth

@@ -5,6 +5,7 @@ import org.springframework.http.HttpStatus;
 /** Kode error publik (functional spec §4). Pesan default dalam Bahasa Indonesia. */
 public enum ErrorCode {
     VALIDATION_FAILED(HttpStatus.BAD_REQUEST, "Data yang dikirim tidak valid."),
+    OTP_INVALID(HttpStatus.BAD_REQUEST, "Kode salah atau sudah tidak berlaku."),
     UNAUTHENTICATED(HttpStatus.UNAUTHORIZED, "Sesi kamu sudah berakhir. Silakan masuk lagi."),
     FORBIDDEN(HttpStatus.FORBIDDEN, "Kamu tidak punya akses ke sini."),
     NOT_FOUND(HttpStatus.NOT_FOUND, "Tidak ditemukan."),

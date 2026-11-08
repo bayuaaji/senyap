@@ -176,6 +176,17 @@ Tabel dipartisi per bulan (`created_at`) supaya retensi dan purge murah.
 | GET | `/v1/me/profile` | | 200 `{public_id, alias: {name, tag, color}, alias_changeable_at}` |
 | POST | `/v1/me/alias/suggest` | `{animal?, color?}` (kosong = acak penuh) | 200 `{name, tag, color, suggestion_token}`. Belum disimpan. |
 | PUT | `/v1/me/alias` | `{suggestion_token}` | 200 `{alias}`, atau 429 `ALIAS_CHANGE_TOO_SOON`. Batas 7 hari tidak berlaku saat onboarding. |
+| PUT | `/v1/me/device` | `{push_token}` | 204. Push token device yang sedang login (FCM/APNs merotasi token). |
+| GET | `/v1/aliases/catalog` | | 200 `{animals: [..], colors: [{name, hex}]}`. Daftar untuk "pilih sendiri". |
+| GET | `/.well-known/jwks.json` | | 200 JWKS publik (tanpa auth), untuk verifikasi access token (M12). |
+
+**Detail implementasi (Fase 1)**
+- `POST /v1/auth/otp` menerima `channel` opsional (`sms`/`whatsapp`, default `sms`). Nomor lokal (`0812…`) dinormalisasi ke E.164.
+- Kode salah atau kedaluwarsa → 400 `OTP_INVALID`. Hanya kode terakhir per nomor yang berlaku.
+- `POST /v1/auth/verify` untuk akun `BANNED` atau `DELETED` (belum di-purge) → 403 `FORBIDDEN`. `is_new` = profil belum dibuat (alias belum dipilih), jadi tetap `true` kalau user keluar dari app di tengah onboarding.
+- Respons token: `{tokens: {access_token, refresh_token, expires_in}}`. Access token JWT ES256; `sub` = `public_id` (bukan user ID), `did` = ID device. Refresh token opaque, dirotasi setiap dipakai; token lama yang dipakai lagi di luar jeda 10 detik mencabut seluruh rantai sesi device itu.
+- `GET /v1/me/profile` juga mengembalikan `onboarded`. `alias_changeable_at` = `null` kalau alias boleh diganti sekarang.
+- `DELETE /v1/me`: semua sesi dicabut seketika; purge (nomor HP diputus dari akun) maksimal 30 hari kemudian. Setelah purge, nomor yang sama bisa mendaftar sebagai akun baru.
 
 ### FS-02 Post anonim [MVP]
 
@@ -444,6 +455,7 @@ pesan DM, inbox, dan notifikasi.
 | Kode | HTTP | Kapan |
 |---|---|---|
 | `VALIDATION_FAILED` | 400 | Input tidak valid |
+| `OTP_INVALID` | 400 | Kode OTP salah, kedaluwarsa, sudah dipakai, atau percobaan habis |
 | `CONTENT_REJECTED` | 422 | Ditolak filter otomatis |
 | `UNAUTHENTICATED` | 401 | Token tidak ada atau kedaluwarsa |
 | `FORBIDDEN` | 403 | Bukan pemilik resource / akun dibatasi |
@@ -475,6 +487,9 @@ dan consumer yang butuh isi (moderasi) membacanya dari DB.
 | `message.retracted` | Chat | Delivery router | `conversation_id` |
 | `report.created` | Safety | Antrean moderator, trust score | `target_id` |
 | `user.blocked` | Safety | Chat (tutup percakapan), cache filter feed | `blocker_id` |
+| `user.registered` | Identity | (belum ada) | `user_id` |
+| `user.alias_changed` | Identity | Read model alias di modul lain (M8) | `user_id` |
+| `user.deleted` / `user.purged` | Identity | Posts, chat: anonimkan konten jadi "[dihapus]" saat `user.purged` | `user_id` |
 
 ---
 

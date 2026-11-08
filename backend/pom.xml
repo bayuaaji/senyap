@@ -27,6 +27,7 @@
         <spring-modulith.version>2.1.1</spring-modulith.version>
         <archunit.version>1.4.1</archunit.version>
         <awssdk.version>2.31.50</awssdk.version>
+        <nimbus-jose-jwt.version>10.9.1</nimbus-jose-jwt.version>
     </properties>
 
     <dependencyManagement>
@@ -54,6 +55,12 @@
                 <groupId>com.tngtech.archunit</groupId>
                 <artifactId>archunit-junit5</artifactId>
                 <version>${archunit.version}</version>
+            </dependency>
+            <!-- JWT (ES256) + JWKS. Spring Boot 4 tidak mengelola versinya. -->
+            <dependency>
+                <groupId>com.nimbusds</groupId>
+                <artifactId>nimbus-jose-jwt</artifactId>
+                <version>${nimbus-jose-jwt.version}</version>
             </dependency>
         </dependencies>
     </dependencyManagement>
