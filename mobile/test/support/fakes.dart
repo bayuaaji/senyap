@@ -4,7 +4,14 @@ import 'package:senyap/app/app.dart';
 import 'package:senyap/core/api/api_client.dart';
 import 'package:senyap/core/api/api_error.dart';
 import 'package:senyap/core/auth/token_store.dart';
+import 'package:senyap/features/compose/background_picker.dart';
 import 'package:senyap/features/onboarding/auth_repository.dart';
+import 'package:senyap/features/posts/location_service.dart';
+import 'package:senyap/features/posts/posts_repository.dart';
+
+import 'fake_posts.dart';
+
+export 'fake_posts.dart';
 import 'package:senyap/features/profile/profile_models.dart';
 import 'package:senyap/features/profile/profile_repository.dart';
 
@@ -85,12 +92,18 @@ Future<void> pumpApp(
   required TokenStore tokens,
   AuthRepository? auth,
   ProfileRepository? profile,
+  PostsRepository? posts,
+  LocationService? location,
+  BackgroundPicker? picker,
 }) async {
   await tester.pumpWidget(ProviderScope(
     overrides: [
       tokenStoreProvider.overrideWithValue(tokens),
       authRepositoryProvider.overrideWithValue(auth ?? FakeAuthRepository()),
       profileRepositoryProvider.overrideWithValue(profile ?? FakeProfileRepository()),
+      postsRepositoryProvider.overrideWithValue(posts ?? FakePostsRepository()),
+      locationServiceProvider.overrideWithValue(location ?? FakeLocationService()),
+      backgroundPickerProvider.overrideWithValue(picker ?? FakeBackgroundPicker()),
     ],
     child: const SenyapApp(),
   ));

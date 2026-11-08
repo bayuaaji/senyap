@@ -58,6 +58,7 @@ public abstract class IntegrationTest {
         r.add("spring.data.redis.port", () -> REDIS.getMappedPort(6379));
         r.add("spring.kafka.bootstrap-servers", REDPANDA::getBootstrapServers);
         r.add("senyap.media.s3.endpoint", MINIO::getS3URL);
+        r.add("senyap.media.public-base-url", () -> MINIO.getS3URL() + "/media");
     }
 
     @LocalServerPort

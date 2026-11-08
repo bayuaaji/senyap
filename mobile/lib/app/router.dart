@@ -12,6 +12,8 @@ import '../features/onboarding/otp_screen.dart';
 import '../features/onboarding/permissions_screen.dart';
 import '../features/onboarding/phone_screen.dart';
 import '../features/onboarding/welcome_screen.dart';
+import '../features/posts/post_detail_screen.dart';
+import '../features/posts/post_models.dart';
 import '../features/profile/create_profile_screen.dart';
 import '../features/settings/settings_screen.dart';
 import 'shell.dart';
@@ -31,6 +33,9 @@ abstract final class AppRoutes {
   static const messages = '/pesan';
   static const notifications = '/notifikasi';
   static const settings = '/pengaturan';
+
+  /// Post + balasan, di atas tab (tanpa bar navigasi bawah). `extra` boleh berisi [Post] untuk tampil instan.
+  static const post = '/post/:id';
 }
 
 /// Arah layar berdasarkan status sesi. Dipisah supaya bisa diuji tanpa widget.
@@ -66,6 +71,13 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(path: AppRoutes.createProfile, builder: (context, state) => const CreateProfileScreen()),
       GoRoute(path: AppRoutes.permissions, builder: (context, state) => const PermissionsScreen()),
+      GoRoute(
+        path: AppRoutes.post,
+        builder: (context, state) => PostDetailScreen(
+          postId: state.pathParameters['id']!,
+          initial: state.extra is Post ? state.extra as Post : null,
+        ),
+      ),
       StatefulShellRoute.indexedStack(
         builder: (context, state, shell) => AppShell(shell: shell),
         branches: [

@@ -2,6 +2,10 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Senyap memakai lokasi kasar (±5 km) untuk feed Sekitar dan nama kota di post. Lokasi tepatmu tidak pernah dikirim.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Pilih foto untuk dijadikan latar post. Foto dikaburkan dan digelapkan sebelum tampil.</string>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<key>CFBundleDevelopmentRegion</key>
