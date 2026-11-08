@@ -187,16 +187,16 @@ produk dan bagian paling sulit secara teknis.
 
 Kerjakan dulu dengan percakapan yang dibuat lewat seed data, karena post baru ada di Fase 3.
 
-- [ ] Request → accept / decline / expire. Kuota harian. Cek block.
-- [ ] Kirim pesan dengan `seq` atomik + `client_msg_id` idempotent + outbox.
-- [ ] Gateway: autentikasi WebSocket, heartbeat, presence (`SET presence:{user} {node} EX 60`).
-- [ ] Delivery router: konsumsi `message.created` → pub/sub ke node penerima, atau ke push.
-- [ ] Status `delivered` / `read`, indikator mengetik (hanya di memori, tidak lewat Kafka).
-- [ ] REST: inbox, requests, riwayat (`before_seq`), gap fill (`after_seq`), fallback kirim.
-- [ ] Tarik pesan, keluar, block.
-- [ ] Gambar di DM (presigned upload + blur sampai diketuk).
-- [ ] Push worker (FCM) dengan collapse per percakapan.
-- [ ] Flutter: inbox, tab permintaan, layar chat dengan antrean kirim offline (simpan lokal di SQLite/Drift, kirim ulang dengan `client_msg_id` yang sama), reconnect dengan backoff, sinkron `last_seq`.
+- [x] Request → accept / decline / expire. Kuota harian. Cek block.
+- [x] Kirim pesan dengan `seq` atomik + `client_msg_id` idempotent + outbox.
+- [x] Gateway: autentikasi WebSocket, heartbeat, presence (hash `presence:{public_id}` field `{node}|{session}`, TTL 60 dtk; multi-device).
+- [x] Delivery router: konsumsi `message.created` → pub/sub ke node penerima, atau ke push.
+- [x] Status `delivered` / `read`, indikator mengetik (hanya di memori, tidak lewat Kafka).
+- [x] REST: inbox, requests, riwayat (`before_seq`), gap fill (`after_seq`), fallback kirim.
+- [x] Tarik pesan, keluar, block.
+- [x] Gambar di DM (presigned upload + blur sampai diketuk). Moderasi gambar menyusul Fase 4.
+- [x] Push worker (FCM) dengan collapse per percakapan. Pengirim masih mock (`LoggingPushSender`); FCM nyata + registrasi token di app menyusul Fase 5.
+- [x] Flutter: inbox, tab permintaan, layar chat dengan antrean kirim offline (simpan lokal di SQLite/Drift, kirim ulang dengan `client_msg_id` yang sama), reconnect dengan backoff, sinkron `last_seq`.
 
 **Selesai jika:**
 - Dua device chat realtime dengan latensi p95 < 500 ms.

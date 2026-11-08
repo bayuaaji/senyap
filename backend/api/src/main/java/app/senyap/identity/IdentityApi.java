@@ -32,4 +32,10 @@ public interface IdentityApi {
      * membatalkannya ({@link #signIn}). Akun {@code BANNED} tidak bisa dihapus. Idempotent.
      */
     void markDeleted(long userId);
+
+    /**
+     * Umur akun + trust score per user ID, untuk kuota bertingkat (functional spec §6: akun baru, normal,
+     * trust rendah). User ID yang tidak dikenal tidak ada di map.
+     */
+    Map<Long, AccountStanding> findStandings(List<Long> userIds);
 }

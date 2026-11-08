@@ -8,6 +8,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
  * API tidak memutus koneksi chat (build guide §5 poin 5). Protokol frame: functional spec FS-05 §5.5.
  */
 @SpringBootApplication
+@org.springframework.scheduling.annotation.EnableScheduling
 public class RealtimeApplication {
 
     public static void main(String[] args) {

@@ -174,4 +174,17 @@ class IdentityService implements IdentityApi, PrincipalResolver {
                 .optional().orElse(null));
         return p != null && p.status().canUseSession() ? OptionalLong.of(p.userId()) : OptionalLong.empty();
     }
+
+    @Override
+    public Map<Long, app.senyap.identity.AccountStanding> findStandings(List<Long> userIds) {
+        if (userIds.isEmpty()) {
+            return Map.of();
+        }
+        return db.jdbc().sql("SELECT id, status, created_at, trust_score FROM users WHERE id IN (:ids)")
+                .param("ids", List.copyOf(userIds))
+                .query((rs, n) -> Map.entry(rs.getLong("id"), new app.senyap.identity.AccountStanding(
+                        AccountStatus.valueOf(rs.getString("status")), rs.getTimestamp("created_at").toInstant(),
+                        rs.getInt("trust_score"))))
+                .list().stream().collect(Collectors.toUnmodifiableMap(Map.Entry::getKey, Map.Entry::getValue));
+    }
 }

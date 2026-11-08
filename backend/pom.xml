@@ -18,8 +18,9 @@
 
     <modules>
         <module>contracts</module>
-        <module>api</module>
+        <!-- realtime sebelum api: RealtimeE2EIT (api) menjalankan jar gateway sebagai proses terpisah. -->
         <module>realtime</module>
+        <module>api</module>
     </modules>
 
     <properties>

@@ -52,10 +52,16 @@ class ChatPersistenceConfig {
         return ModuleInfrastructure.newTopic(MODULE, env);
     }
 
+    /**
+     * Relay chat sengaja bukan bean {@link OutboxRelay} (scheduler bersama polling 500 ms): dijalankan
+     * {@link ChatOutboxPump} supaya pesan DM cepat sampai ke delivery router.
+     */
     @Bean
     @ConditionalOnProperty(name = "senyap.worker.enabled", havingValue = "true")
-    OutboxRelay chatOutboxRelay(@Qualifier("chatDatabase") ModuleDatabase db, KafkaTemplate<String, String> kafka,
-                              Environment env) {
-        return ModuleInfrastructure.outboxRelay(db, kafka, env);
+    ChatOutboxPump chatOutboxPump(@Qualifier("chatDatabase") ModuleDatabase db, KafkaTemplate<String, String> kafka,
+                                  Environment env) {
+        OutboxRelay relay = ModuleInfrastructure.outboxRelay(db, kafka, env);
+        return new ChatOutboxPump(relay,
+                env.getProperty("senyap.chat.outbox.poll-interval", java.time.Duration.class, java.time.Duration.ofMillis(100)));
     }
 }

@@ -5,7 +5,9 @@ import 'package:go_router/go_router.dart';
 import '../core/auth/session.dart';
 import '../features/compose/compose_screen.dart';
 import '../features/feed/feed_screen.dart';
+import '../features/messages/chat_screen.dart';
 import '../features/messages/messages_screen.dart';
+import '../features/messages/new_whisper_screen.dart';
 import '../features/notifications/notifications_screen.dart';
 import '../features/onboarding/age_screen.dart';
 import '../features/onboarding/otp_screen.dart';
@@ -31,6 +33,9 @@ abstract final class AppRoutes {
   static const messages = '/pesan';
   static const notifications = '/notifikasi';
   static const settings = '/pengaturan';
+
+  /// Mulai Bisik: `/bisik/baru?origin_type=POST&origin_id=…&excerpt=…`.
+  static const newWhisper = '/bisik/baru';
 }
 
 /// Arah layar berdasarkan status sesi. Dipisah supaya bisa diuji tanpa widget.
@@ -66,12 +71,31 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(path: AppRoutes.createProfile, builder: (context, state) => const CreateProfileScreen()),
       GoRoute(path: AppRoutes.permissions, builder: (context, state) => const PermissionsScreen()),
+      GoRoute(
+        path: AppRoutes.newWhisper,
+        builder: (context, state) => NewWhisperScreen(
+          originType: state.uri.queryParameters['origin_type'] ?? 'POST',
+          originId: state.uri.queryParameters['origin_id'] ?? '',
+          excerpt: state.uri.queryParameters['excerpt'],
+        ),
+      ),
       StatefulShellRoute.indexedStack(
         builder: (context, state, shell) => AppShell(shell: shell),
         branches: [
           _branch(AppRoutes.feed, const FeedScreen()),
           _branch(AppRoutes.compose, const ComposeScreen()),
-          _branch(AppRoutes.messages, const MessagesScreen()),
+          StatefulShellBranch(routes: [
+            GoRoute(
+              path: AppRoutes.messages,
+              builder: (context, state) => const MessagesScreen(),
+              routes: [
+                GoRoute(
+                  path: ':id',
+                  builder: (context, state) => ChatScreen(conversationId: state.pathParameters['id']!),
+                ),
+              ],
+            ),
+          ]),
           _branch(AppRoutes.notifications, const NotificationsScreen()),
           _branch(AppRoutes.settings, const SettingsScreen()),
         ],

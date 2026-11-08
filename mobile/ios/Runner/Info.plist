@@ -66,5 +66,7 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Senyap memakai galeri untuk mengirim gambar di Bisik atau sebagai latar post.</string>
 </dict>
 </plist>

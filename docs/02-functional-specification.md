@@ -296,8 +296,21 @@ Sebelum diterima, pengirim **tidak bisa** mengirim pesan tambahan. Ini mencegah 
 | POST | `/v1/conversations/{id}/block` | 204 |
 | GET | `/v1/conversations/{id}/messages?before_seq=&limit=50` | Riwayat (sinkronisasi saat app dibuka) |
 | GET | `/v1/conversations/{id}/messages?after_seq=` | Ambil pesan yang tertinggal (gap fill) |
-| POST | `/v1/conversations/{id}/messages` | Fallback kirim lewat REST jika WebSocket putus |
+| POST | `/v1/conversations/{id}/messages` | Fallback kirim lewat REST jika WebSocket putus. `{client_msg_id, type, body?, media_id?}` → 201 ack baru, 200 ack lama (kirim ulang) |
 | DELETE | `/v1/conversations/{id}/messages/{seq}` | Tarik pesan |
+| POST | `/v1/conversations/{id}/receipts` | `{delivered_up_to?, read_up_to?}` → 204. Dipakai gateway untuk `msg.delivered`/`msg.read` |
+| POST | `/v1/conversations/{id}/hide` | 204. Hapus dari inbox sendiri (`hidden_at`) |
+| POST | `/v1/conversations/sync` | `{conversations: [{conversation_id, last_seq}]}` → `{changed: [{conversation_id, last_seq, status}]}` (sinkron saat reconnect) |
+| GET | `/v1/conversations/badge` | `{unread_messages, requests}` untuk badge tab |
+| POST | `/v1/media/dm-uploads` | `{mime_type, size_bytes}` → 201 `{media_id, upload_url, upload_method, upload_headers, expires_at}` (presigned PUT, objek privat) |
+| POST | `/v1/media/dm-uploads/{id}/complete` | 200 `{media_id, status: "READY"}` |
+| POST | `/v1/dev/origins` | **Sementara, hanya profil local/test**: `{excerpt}` → asal Bisik seed milik pemanggil, sampai Fase 3 digabung |
+
+Bentuk `conversation`: `{id, status, role: "initiator"|"recipient", peer: {public_id, name, tag, color}, origin: {type, id, excerpt}, last_seq, last_message, unread_count, my_delivered_up_to, my_read_up_to, peer_delivered_up_to, peer_read_up_to, last_message_at, created_at}`.
+Bentuk pesan: `{conversation_id, seq, sender: "me"|"them", type, body?, media?: {id, url, mime_type, expires_at}, retracted, client_msg_id? (hanya milik sendiri), created_at}`.
+Tab `inbox` = semua percakapan saya kecuali request masuk yang belum/ sudah ditolak; tab `requests` = request masuk `REQUESTED`.
+Pesan ditarik: `retracted: true`, isi tidak dikirim lagi (tetap disimpan untuk bukti report). Pesan `SYSTEM` berisi `left` = "Lawan bicara telah pergi" (keluar maupun block, tidak dibedakan).
+`media.url` gambar DM = presigned GET (1 jam), objek tidak pernah publik. Client menampilkannya blur sampai diketuk "Lihat".
 
 #### 5.5 Protokol realtime (WebSocket)
 
@@ -332,6 +345,15 @@ Endpoint: `wss://rt.senyap.app/v1/ws?token=<access_token>`. Semua frame berbentu
 - **Sinkron saat reconnect**: client mengirim daftar `{conversation_id, last_seq}` yang diketahuinya. Server membalas percakapan yang punya pesan lebih baru.
 - **Offline**: penerima yang tidak punya koneksi WebSocket aktif → push notification.
 
+**Implementasi (Fase 2)**
+- Handshake: `Authorization: Bearer <access_token>` (bukan query string). Token kedaluwarsa saat sesi berjalan → frame `error UNAUTHENTICATED` lalu tutup dengan kode **4401**; client refresh token lalu sambung ulang.
+- Gateway tidak punya akses DB: `msg.send` diteruskan ke `POST /v1/conversations/{id}/messages`, `msg.delivered`/`msg.read` ke `…/receipts`, dengan token user. Frame satu sesi diproses berurutan.
+- Presence: hash Redis `presence:{public_id}` (field `{node}|{session}`, nilai = heartbeat terakhir, TTL 60 dtk). Dikunci `public_id` karena gateway hanya tahu `public_id`; delivery router di api menerjemahkan user ID → `public_id` lewat identity. Frame ke node lewat channel `rt:node:{node}` (`contracts/rt/RealtimeBus`).
+- `typing` tidak lewat api maupun Kafka: gateway mencari lawan bicara (`GET /v1/conversations/{id}`, cache 60 dtk) lalu publish ke node-nya.
+- `msg.new` juga dikirim ke device lain milik pengirim (`sender: "me"`, berisi `client_msg_id`).
+- Sinkron saat reconnect memakai REST `POST /v1/conversations/sync` (bukan frame WS).
+- Ping tiap 25 dtk; sesi tanpa frame masuk > 75 dtk ditutup. Saat gateway berhenti dengan rapi, presence sesinya dihapus supaya router langsung memakai push.
+
 ### FS-06 Notifikasi [MVP]
 
 | Tipe | Pemicu | Isi push (tanpa isi pesan secara default) |
@@ -344,6 +366,7 @@ Endpoint: `wss://rt.senyap.app/v1/ws?token=<access_token>`. Semua frame berbentu
 
 - Push via FCM (Android) dan APNs (iOS). Payload tidak memuat ID internal.
 - Pesan DM yang berturut-turut digabung (`collapse_key` per percakapan).
+- Fase 2: push dikirim delivery router hanya ke penerima tanpa sesi WebSocket hidup. `collapse_key = "conv-{conversation_id}"`, data `{type, conversation_id}`, judul "Senyap". Pengirim push masih mock (`LoggingPushSender`); FCM/APNs nyata menyusul (Fase 5).
 
 | Method | Path |
 |---|---|
@@ -463,6 +486,9 @@ pesan DM, inbox, dan notifikasi.
 | `ALREADY_WHISPERED` | 409 | Sudah pernah Bisik dari asal yang sama |
 | `ALIAS_CHANGE_TOO_SOON` | 429 | Ganti alias < 7 hari dari perubahan terakhir |
 | `CONVERSATION_CLOSED` | 409 | Percakapan sudah ditutup |
+| `CONVERSATION_PENDING` | 409 | Kirim pesan sebelum request Bisik diterima |
+| `RETRACT_EXPIRED` | 409 | Tarik pesan lebih dari 10 menit setelah dikirim |
+| `WHISPER_QUOTA_EXCEEDED` | 429 | Kuota request Bisik harian habis (§6), dengan `Retry-After` |
 | `RATE_LIMITED` / `*_QUOTA_EXCEEDED` | 429 | Dengan header `Retry-After` |
 
 > Kalau target memblokir pengirim, server mengembalikan `NOT_FOUND`, **bukan** `BLOCKED`.
@@ -482,11 +508,13 @@ dan consumer yang butuh isi (moderasi) membacanya dari DB.
 | `post.created` / `post.deleted` | Posts | Moderasi, cache feed, counter | `post_id` |
 | `reply.created` / `reply.deleted` | Replies | Moderasi, counter, notifikasi | `post_id` |
 | `post.hearted` / `post.unhearted` | Hearts | Counter, notifikasi milestone | `post_id` |
-| `conversation.requested` / `.accepted` / `.declined` / `.closed` | Chat | Notifikasi, trust score | `conversation_id` |
+| `conversation.requested` / `.accepted` / `.declined` / `.closed` | Chat | Delivery router (`conv.updated` + push `DM_REQUEST`/`DM_ACCEPTED`), trust score | `conversation_id` |
 | `message.created` | Chat | **Delivery router**, push, moderasi | `conversation_id` |
 | `message.retracted` | Chat | Delivery router | `conversation_id` |
 | `report.created` | Safety | Antrean moderator, trust score | `target_id` |
-| `user.blocked` | Safety | Chat (tutup percakapan), cache filter feed | `blocker_id` |
+| `user.blocked` | Safety | Chat (tutup semua percakapan keduanya), cache filter feed | `blocker_id` |
+
+Payload event chat (Fase 2): `conversation.*` = `{conversation_id, initiator_id, recipient_id}` (+ `reason` untuk declined: `DECLINED`/`EXPIRED`, `closed_by` untuk closed); `message.created`/`message.retracted` = `{conversation_id, seq}`. Pesan pembuka (`seq = 1`) tidak menerbitkan `message.created`; request diberitahukan lewat `conversation.requested`. `user.blocked` = `{blocker_id, blocked_id, conversation_id?}`. User ID hanya ada di event internal, tidak pernah ke client.
 | `user.registered` | Identity | (belum ada) | `user_id` |
 | `user.alias_changed` | Identity | Read model alias di modul lain (M8) | `user_id` |
 | `user.deleted` / `user.restored` / `user.purged` | Identity | Posts, chat: anonimkan konten jadi "[dihapus]" saat `user.purged` (`user.restored` = penghapusan dibatalkan) | `user_id` |

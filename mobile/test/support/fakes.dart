@@ -4,6 +4,9 @@ import 'package:senyap/app/app.dart';
 import 'package:senyap/core/api/api_client.dart';
 import 'package:senyap/core/api/api_error.dart';
 import 'package:senyap/core/auth/token_store.dart';
+import 'package:senyap/features/messages/chat_models.dart';
+import 'package:senyap/features/messages/chat_providers.dart';
+import 'package:senyap/features/messages/chat_repository.dart';
 import 'package:senyap/features/onboarding/auth_repository.dart';
 import 'package:senyap/features/profile/profile_models.dart';
 import 'package:senyap/features/profile/profile_repository.dart';
@@ -80,6 +83,18 @@ class FakeProfileRepository implements ProfileRepository {
       );
 }
 
+/// Inbox kosong.
+class EmptyChatRepository implements ChatRepository {
+  @override
+  Future<ConversationPage> list({required String box, String? cursor}) async => const ConversationPage([], null);
+
+  @override
+  Future<ChatBadge> badge() async => const ChatBadge(unreadMessages: 0, requests: 0);
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => throw UnimplementedError();
+}
+
 Future<void> pumpApp(
   WidgetTester tester, {
   required TokenStore tokens,
@@ -91,6 +106,9 @@ Future<void> pumpApp(
       tokenStoreProvider.overrideWithValue(tokens),
       authRepositoryProvider.overrideWithValue(auth ?? FakeAuthRepository()),
       profileRepositoryProvider.overrideWithValue(profile ?? FakeProfileRepository()),
+      // Bisik: tanpa WebSocket/SQLite nyata di widget test.
+      chatRepositoryProvider.overrideWithValue(EmptyChatRepository()),
+      chatEngineProvider.overrideWithValue(null),
     ],
     child: const SenyapApp(),
   ));

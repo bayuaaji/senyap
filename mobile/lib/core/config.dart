@@ -5,4 +5,10 @@ abstract final class AppConfig {
     'SENYAP_API_URL',
     defaultValue: 'http://localhost:8180',
   );
+
+  /// Gateway WebSocket Bisik, misalnya `--dart-define=SENYAP_RT_URL=ws://10.0.2.2:8190/v1/ws`.
+  static const realtimeUrl = String.fromEnvironment(
+    'SENYAP_RT_URL',
+    defaultValue: 'ws://localhost:8190/v1/ws',
+  );
 }
