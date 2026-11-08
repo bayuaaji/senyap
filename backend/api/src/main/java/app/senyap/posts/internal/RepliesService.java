@@ -8,6 +8,9 @@ import app.senyap.shared.error.ErrorCode;
 import app.senyap.shared.id.Tsid;
 import app.senyap.shared.outbox.OutboxWriter;
 import app.senyap.shared.ratelimit.RateLimiter;
+import app.senyap.safety.ContentType;
+import app.senyap.safety.TextVerdict;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import java.sql.Timestamp;
 import java.time.Instant;
@@ -35,7 +38,13 @@ class RepliesService {
     record ReplyView(@JsonProperty("id") String id, @JsonProperty("post_id") String postId,
                      @JsonProperty("author") ReplyAuthor author, @JsonProperty("body") String body,
                      @JsonProperty("created_at") Instant createdAt, @JsonProperty("is_mine") boolean isMine,
-                     @JsonProperty("can_whisper") boolean canWhisper, @JsonProperty("is_hidden") boolean isHidden) {
+                     @JsonProperty("can_whisper") boolean canWhisper, @JsonProperty("is_hidden") boolean isHidden,
+                     @JsonProperty("support_card") @JsonInclude(JsonInclude.Include.NON_NULL) Boolean supportCard) {
+
+        /** Hanya di respons membuat balasan, untuk penulisnya (FS-08 kartu bantuan). */
+        ReplyView withSupportCard() {
+            return new ReplyView(id, postId, author, body, createdAt, isMine, canWhisper, isHidden, Boolean.TRUE);
+        }
     }
 
     private record ReplyRow(long id, long postId, long authorId, String body, Instant createdAt, boolean hidden,
@@ -81,6 +90,11 @@ class RepliesService {
                         rs.getString("body"), rs.getTimestamp("created_at").toInstant(), rs.getBoolean("hidden"),
                         rs.getBoolean("purged")))
                 .list();
+        // Block dua arah: balasan dari/ke akun yang saling memblokir tidak tampil.
+        var blocked = posts.blockedAmong(viewerId, rows.stream().map(ReplyRow::authorId).toList());
+        if (!blocked.isEmpty()) {
+            rows = rows.stream().filter(r -> !blocked.contains(r.authorId())).toList();
+        }
         Map<Long, PublicIdentity> ids = identity.resolveIdentities(
                 rows.stream().filter(r -> !r.authorPurged()).map(ReplyRow::authorId).distinct().toList());
         return rows.stream().map(r -> view(r, postAuthor, viewerId, ids)).toList();
@@ -95,23 +109,31 @@ class RepliesService {
         if (!posts.visibleTo(postId, userId)) {
             throw new ApiException(ErrorCode.NOT_FOUND);
         }
-        Quotas.daily(rateLimiter, "reply", userId, props.repliesPerDay(), props.repliesPerDayNewAccount(), "REPLY",
-                "Kamu sudah mencapai batas balasan hari ini.");
+        var standing = posts.writer(userId);
+        TextVerdict verdict = posts.screen(ContentType.REPLY, body);
+        Quotas.daily(rateLimiter, "reply", userId, standing, props.repliesPerDay(), props.repliesPerDayNewAccount(),
+                "REPLY", "Kamu sudah mencapai batas balasan hari ini.");
+        String visibility = PostsService.initialVisibility(standing, verdict);
+        boolean counted = "PUBLIC".equals(visibility);
         long id = tsid.next();
         Instant now = Instant.now();
         db.tx().executeWithoutResult(s -> {
             db.jdbc().sql("""
-                            INSERT INTO replies (id, post_id, author_id, body, created_at)
-                            VALUES (:id, :post, :author, :body, :now)""")
-                    .param("id", id).param("post", postId).param("author", userId).param("body", body)
+                            INSERT INTO replies (id, post_id, author_id, body, visibility, created_at)
+                            VALUES (:id, :post, :author, :body, :vis, :now)""")
+                    .param("vis", visibility).param("id", id).param("post", postId).param("author", userId).param("body", body)
                     .param("now", Timestamp.from(now))
                     .update();
-            db.jdbc().sql("UPDATE posts SET reply_count = reply_count + 1 WHERE id = :post").param("post", postId).update();
+            if (counted) {
+                db.jdbc().sql("UPDATE posts SET reply_count = reply_count + 1 WHERE id = :post").param("post", postId)
+                        .update();
+            }
             outbox.append("reply.created", Long.toString(postId), Map.of("reply_id", id, "post_id", postId));
         });
         long postAuthor = posts.authorOf(postId);
         var row = new ReplyRow(id, postId, userId, body, now, false, false);
-        return view(row, postAuthor, userId, identity.resolveIdentities(List.of(userId)));
+        var view = view(row, postAuthor, userId, identity.resolveIdentities(List.of(userId)));
+        return verdict.selfHarm() ? view.withSupportCard() : view;
     }
 
     void delete(long userId, long replyId) {
@@ -122,7 +144,7 @@ class RepliesService {
         db.tx().executeWithoutResult(s -> {
             int n = db.jdbc().sql("""
                             UPDATE replies SET deleted_at = now() WHERE id = :id AND deleted_at IS NULL
-                            RETURNING hidden_by_post_author_at IS NULL AS counted""")
+                            RETURNING hidden_by_post_author_at IS NULL AND visibility = 'PUBLIC' AS counted""")
                     .param("id", replyId).query(Boolean.class).optional()
                     .map(counted -> {
                         if (counted) {
@@ -190,6 +212,6 @@ class RepliesService {
                 ? new ReplyAuthor(null, PostsService.DELETED_NAME, null, null, false)
                 : new ReplyAuthor(p.publicId(), p.name(), p.tag(), p.color(), isPostAuthor);
         return new ReplyView(Tsid.toString(r.id()), Tsid.toString(r.postId()), author, r.body(),
-                PostsService.minute(r.createdAt()), mine, !mine && !r.authorPurged() && !r.hidden(), r.hidden());
+                PostsService.minute(r.createdAt()), mine, !mine && !r.authorPurged() && !r.hidden(), r.hidden(), null);
     }
 }

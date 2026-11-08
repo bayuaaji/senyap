@@ -94,9 +94,11 @@ final class ChatViews {
     }
 
     /** {@code msg.ack} / respons kirim REST. */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
     record Ack(@JsonProperty("client_msg_id") UUID clientMsgId,
                @JsonProperty("conversation_id") String conversationId, @JsonProperty("seq") long seq,
-               @JsonProperty("created_at") Instant createdAt) {
+               @JsonProperty("created_at") Instant createdAt,
+               @JsonProperty("support_card") Boolean supportCard) {
     }
 
     @JsonInclude(JsonInclude.Include.NON_NULL)

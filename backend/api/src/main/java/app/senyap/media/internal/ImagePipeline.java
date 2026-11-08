@@ -36,7 +36,16 @@ class ImagePipeline {
         }
     }
 
-    record Processed(byte[] jpeg, int width, int height, String blurhash, byte[] perceptualHash) {
+    /**
+     * @param originalHashHex dHash gambar <b>asli</b> (setelah orientasi + resize, sebelum blur) untuk hash matching
+     * @param skinRatio       proporsi piksel warna kulit (sinyal klasifikasi gambar heuristik)
+     */
+    record Processed(byte[] jpeg, int width, int height, String blurhash, byte[] perceptualHash,
+                     String originalHashHex, double skinRatio) {
+    }
+
+    /** Sinyal moderasi dari gambar asli (FS-08). */
+    record Signals(String hashHex, double skinRatio) {
     }
 
     private final MediaProperties props;
@@ -53,9 +62,49 @@ class ImagePipeline {
             decoded = applyOrientation(decoded, ExifOrientation.read(input));
         }
         BufferedImage img = resize(toRgb(decoded), props.maxDimension());
+        Signals signals = signals(img);
         img = blur(img, props.blurRadius());
         overlay(img, props.overlayAlpha());
-        return finish(img);
+        Processed p = finish(img);
+        return new Processed(p.jpeg(), p.width(), p.height(), p.blurhash(), p.perceptualHash(), signals.hashHex(),
+                signals.skinRatio());
+    }
+
+    /** Hanya sinyal moderasi (gambar DM tidak diproses ulang). */
+    Signals inspect(byte[] input) throws RejectedImage {
+        String format = detectFormat(input);
+        BufferedImage decoded = decode(input, format);
+        if ("jpeg".equals(format)) {
+            decoded = applyOrientation(decoded, ExifOrientation.read(input));
+        }
+        return signals(resize(toRgb(decoded), props.maxDimension()));
+    }
+
+    static Signals signals(BufferedImage img) {
+        return new Signals(java.util.HexFormat.of().formatHex(dHash(img)), skinRatio(img));
+    }
+
+    /** Proporsi piksel dalam rentang warna kulit YCbCr klasik (Cb 77–127, Cr 133–173), sampel grid ≤ 100×100. */
+    static double skinRatio(BufferedImage img) {
+        int stepX = Math.max(1, img.getWidth() / 100);
+        int stepY = Math.max(1, img.getHeight() / 100);
+        int total = 0;
+        int skin = 0;
+        for (int y = 0; y < img.getHeight(); y += stepY) {
+            for (int x = 0; x < img.getWidth(); x += stepX) {
+                int rgb = img.getRGB(x, y);
+                int r = (rgb >> 16) & 0xff;
+                int g = (rgb >> 8) & 0xff;
+                int b = rgb & 0xff;
+                double cb = 128 - 0.168736 * r - 0.331264 * g + 0.5 * b;
+                double cr = 128 + 0.5 * r - 0.418688 * g - 0.081312 * b;
+                total++;
+                if (cb >= 77 && cb <= 127 && cr >= 133 && cr <= 173) {
+                    skin++;
+                }
+            }
+        }
+        return total == 0 ? 0 : (double) skin / total;
     }
 
     /** Untuk galeri bawaan: hanya resize + encode (gambar sudah dirancang terbaca). */
@@ -213,7 +262,7 @@ class ImagePipeline {
 
     private static Processed finish(BufferedImage img) {
         return new Processed(encodeJpeg(img, 0.85f), img.getWidth(), img.getHeight(),
-                BlurHash.encode(resize(img, 32), 4, 3), dHash(img));
+                BlurHash.encode(resize(img, 32), 4, 3), dHash(img), null, 0);
     }
 
     static byte[] encodeJpeg(BufferedImage img, float quality) {

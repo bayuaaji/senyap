@@ -33,6 +33,12 @@ class InboxChanged extends ChatEvent {
   const InboxChanged();
 }
 
+/// Pesan yang baru terkirim terdeteksi berisiko menyakiti diri: tampilkan kartu bantuan (FS-08).
+class SupportCardSuggested extends ChatEvent {
+  const SupportCardSuggested(this.conversationId);
+  final String conversationId;
+}
+
 class PeerTyping extends ChatEvent {
   const PeerTyping(this.conversationId);
   final String conversationId;
@@ -195,6 +201,7 @@ class ChatEngine {
     ]);
     await store.removePending(p.clientMsgId);
     _events.add(ConversationChanged(p.conversationId));
+    if (ack.supportCard) _events.add(SupportCardSuggested(p.conversationId));
   }
 
   Future<void> _fail(PendingMessage p, ApiError e) async {

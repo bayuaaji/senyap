@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="id">
+<head th:replace="~{admin/_layout :: head('Kasus')}"></head>
+<body>
+<header th:replace="~{admin/_layout :: nav}"></header>
+<main>
+  <p th:if="${ok}" class="ok" th:text="${ok}"></p>
+  <p th:if="${error}" class="error" th:text="${error}"></p>
+  <h1>Kasus <span th:text="${c.reportId()}">1</span>
+    <span th:class="'badge p' + ${c.priority()}" th:text="'P' + ${c.priority()}">P0</span></h1>
+  <div class="warn" th:if="${c.priority() == 0}">P0: tindak lanjuti segera dan ikuti prosedur eskalasi P0
+    (docs/05-prosedur-eskalasi-p0.md).</div>
+  <div class="card">
+    <p><b>Status:</b> <span th:text="${c.status()}">OPEN</span>
+      <span th:if="${c.resolution()}" th:text="'(' + ${c.resolution()} + ')'"></span> ·
+      <b>Sumber:</b> <span th:text="${c.source()}">USER</span> ·
+      <b>Konten:</b> <span th:text="${c.targetType()} + ' ' + ${c.targetId()}">POST</span> ·
+      <b>Visibilitas:</b> <span th:text="${c.visibility()}">PUBLIC</span></p>
+    <p><b>Alasan:</b> <span th:text="${c.reason()}">threat</span>
+      <span th:unless="${#lists.isEmpty(c.labels())}" th:text="' · label: ' + ${#strings.listJoin(c.labels(), ', ')}"></span>
+      · <b>Laporan atas konten ini:</b> <span th:text="${c.reportsOnTarget()}">1</span></p>
+    <p th:if="${c.note()}"><b>Catatan pelapor:</b> <span th:text="${c.note()}"></span></p>
+    <p><b>Akun:</b> <code th:text="${c.accountRef()}">AKN-</code>
+      <span class="muted">(rujukan acak khusus kasus ini; tidak bisa dicocokkan antar kasus)</span></p>
+    <p th:if="${legal}"><a th:href="@{/admin/legal/cases/{id}/identity(id=${c.reportId()})}">Penelusuran identitas (legal)</a></p>
+  </div>
+  <div class="card">
+    <h2>Snapshot</h2>
+    <p th:if="${c.text()}" style="white-space:pre-wrap" th:text="${c.text()}"></p>
+    <p th:if="${c.imageUrl()}"><img th:src="${c.imageUrl()}" alt="latar" style="max-width:320px"></p>
+    <div th:each="m : ${c.context()}" th:class="'msg ' + ${m.who()} + (${m.reported()} ? ' reported' : '')">
+      <span class="muted" th:text="'#' + ${m.seq()} + ' · ' + ${m.who()} + (${m.retracted()} ? ' · ditarik' : '')"></span><br>
+      <span style="white-space:pre-wrap" th:text="${m.body()}"></span>
+    </div>
+  </div>
+  <div class="card">
+    <h2>Riwayat pelanggaran akun ini</h2>
+    <table>
+      <tr th:each="h : ${c.history()}"><td th:text="${h.action()}"></td><td th:text="${h.reason()}"></td>
+        <td class="muted" th:text="${#temporals.format(h.createdAt(), 'yyyy-MM-dd', 'Asia/Jakarta')}"></td></tr>
+      <tr th:if="${#lists.isEmpty(c.history())}"><td class="muted">Tidak ada.</td></tr>
+    </table>
+  </div>
+  <div class="card">
+    <h2>Aksi</h2>
+    <table th:unless="${#lists.isEmpty(c.actions())}">
+      <tr th:each="a : ${c.actions()}"><td th:text="${a.action()}"></td><td th:text="${a.reason()}"></td>
+        <td th:text="${a.actor()}"></td>
+        <td class="muted" th:text="${#temporals.format(a.createdAt(), 'yyyy-MM-dd HH:mm', 'Asia/Jakarta')}"></td></tr>
+    </table>
+    <form th:action="@{/admin/cases/{id}/actions(id=${c.reportId()})}" method="post">
+      <p><select name="action">
+        <option th:each="a : ${actions}" th:value="${a}" th:text="${a}"
+                th:disabled="${!c.contentModeratable() and (a.name() == 'HIDE_CONTENT' or a.name() == 'RESTORE_CONTENT')}"></option>
+      </select></p>
+      <p><textarea name="reason" rows="2" placeholder="Alasan (wajib, tercatat di audit log)" required></textarea></p>
+      <button type="submit">Jalankan</button>
+    </form>
+  </div>
+</main>
+</body>
+</html>

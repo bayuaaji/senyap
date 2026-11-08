@@ -109,6 +109,23 @@ senyap:
       username: senyap_notifications
       password: ${SENYAP_DB_NOTIFICATIONS_PASSWORD:}
   safety:
+    # Rahasia account_ref per kasus di konsol moderator. Kosong = acak per proses (ref berubah setelah restart).
+    account-ref-secret: ${SENYAP_SAFETY_ACCOUNT_REF_SECRET:}
+    # Daftar hash gambar terlarang. Di repo kosong; produksi: file di luar repo (lihat docs/05-prosedur-eskalasi-p0.md).
+    image-hash-file: ${SENYAP_SAFETY_IMAGE_HASH_FILE:classpath:safety/known-image-hashes.txt}
+    support:
+      # PERLU DICEK SEBELUM RILIS. Nomor hotline Indonesia BELUM diverifikasi (pertanyaan terbuka di PROGRESS.md).
+      # Di luar profil local/test aplikasi gagal start sampai hotline diisi dari sumber resmi dan verified=true.
+      verified: false
+      title: Kamu tidak sendirian
+      message: >-
+        Sepertinya kamu sedang melewati masa yang berat. Kamu berhak mendapat dukungan. Bicara dengan orang
+        yang kamu percaya atau layanan di bawah ini bisa membantu. Kalau kamu dalam bahaya sekarang, hubungi
+        layanan darurat terdekat.
+      hotlines:
+        - name: "[PERLU DIISI] Layanan konseling krisis / kesehatan jiwa"
+          contact: BELUM-DIVERIFIKASI
+          hours: "[PERLU DICEK]"
     datasource:
       url: ${SENYAP_DB_URL:jdbc:postgresql://localhost:5432/senyap}
       username: senyap_safety

@@ -59,6 +59,7 @@ class Post {
     this.isMine = false,
     this.canWhisper = false,
     required this.createdAt,
+    this.supportCard = false,
   });
 
   final String id;
@@ -74,6 +75,9 @@ class Post {
   final bool canWhisper;
   final DateTime createdAt;
 
+  /// Hanya di respons membuat post: tulisan terdeteksi berisiko menyakiti diri → tampilkan kartu bantuan.
+  final bool supportCard;
+
   factory Post.fromJson(Map<String, dynamic> j) => Post(
         id: j['id'] as String,
         author: Author.fromJson(j['author'] as Map<String, dynamic>),
@@ -87,6 +91,7 @@ class Post {
         isMine: j['is_mine'] as bool? ?? false,
         canWhisper: j['can_whisper'] as bool? ?? false,
         createdAt: DateTime.parse(j['created_at'] as String),
+        supportCard: j['support_card'] as bool? ?? false,
       );
 
   Post copyWith({int? heartCount, int? replyCount, bool? viewerHasHearted}) => Post(
@@ -120,6 +125,7 @@ class Reply {
     this.isMine = false,
     this.canWhisper = false,
     this.isHidden = false,
+    this.supportCard = false,
   });
 
   final String id;
@@ -131,6 +137,9 @@ class Reply {
   final bool canWhisper;
   final bool isHidden;
 
+  /// Hanya di respons membuat balasan (lihat [Post.supportCard]).
+  final bool supportCard;
+
   factory Reply.fromJson(Map<String, dynamic> j) => Reply(
         id: j['id'] as String,
         postId: j['post_id'] as String,
@@ -140,6 +149,7 @@ class Reply {
         isMine: j['is_mine'] as bool? ?? false,
         canWhisper: j['can_whisper'] as bool? ?? false,
         isHidden: j['is_hidden'] as bool? ?? false,
+        supportCard: j['support_card'] as bool? ?? false,
       );
 }
 

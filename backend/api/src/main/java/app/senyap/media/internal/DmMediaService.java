@@ -2,6 +2,9 @@ package app.senyap.media.internal;
 
 import app.senyap.media.DmImage;
 import app.senyap.media.DmMediaApi;
+import app.senyap.safety.ImageScreening;
+import app.senyap.safety.SafetyApi;
+import app.senyap.safety.ScreeningDecision;
 import app.senyap.shared.db.ModuleDatabase;
 import app.senyap.shared.error.ApiException;
 import app.senyap.shared.error.ErrorCode;
@@ -37,9 +40,6 @@ class DmMediaService implements DmMediaApi, DisposableBean {
     static final long MAX_BYTES = 10L * 1024 * 1024;
     static final Duration UPLOAD_TTL = Duration.ofMinutes(10);
     static final Duration READ_TTL = Duration.ofHours(1);
-    /** functional spec §6 "Upload gambar" akun normal; tier akun baru/trust rendah menyusul Fase 4. */
-    static final int UPLOADS_PER_DAY = 30;
-
     record Upload(long mediaId, String url, Map<String, String> headers, Instant expiresAt) {
     }
 
@@ -48,15 +48,21 @@ class DmMediaService implements DmMediaApi, DisposableBean {
     private final S3Presigner presigner;
     private final MediaStorageProperties props;
     private final Tsid tsid;
-    private final RateLimiter rateLimiter;
+    private final UploadQuota quota;
+    private final ImagePipeline pipeline;
+    private final SafetyApi safety;
+    private final MediaService media;
 
     DmMediaService(@Qualifier("mediaDatabase") ModuleDatabase db, S3Client s3, MediaStorageProperties props, Tsid tsid,
-                   RateLimiter rateLimiter) {
+                   UploadQuota quota, ImagePipeline pipeline, SafetyApi safety, MediaService media) {
+        this.quota = quota;
+        this.pipeline = pipeline;
+        this.safety = safety;
+        this.media = media;
         this.db = db;
         this.s3 = s3;
         this.props = props;
         this.tsid = tsid;
-        this.rateLimiter = rateLimiter;
         var builder = S3Presigner.builder()
                 .region(Region.of(props.region()))
                 .credentialsProvider(StaticCredentialsProvider.create(
@@ -75,7 +81,7 @@ class DmMediaService implements DmMediaApi, DisposableBean {
         if (sizeBytes <= 0 || sizeBytes > MAX_BYTES) {
             throw new ApiException(ErrorCode.VALIDATION_FAILED, "Ukuran gambar maksimal 10 MB.");
         }
-        rateLimiter.hit("media-dm:" + ownerUserId, UPLOADS_PER_DAY, Duration.ofDays(1));
+        quota.hit("media-dm:", ownerUserId);
         long id = tsid.next();
         String key = PREFIX + Tsid.toString(id);
         db.jdbc().sql("""
@@ -115,6 +121,19 @@ class DmMediaService implements DmMediaApi, DisposableBean {
             if (actual <= 0 || actual > MAX_BYTES) {
                 db.jdbc().sql("UPDATE media SET status = 'REJECTED' WHERE id = :id").param("id", mediaId).update();
                 throw new ApiException(ErrorCode.CONTENT_REJECTED);
+            }
+            // FS-08: gambar DM juga lewat hash matching + klasifikasi (sinkron; gambar ≤ 10 MB).
+            ImagePipeline.Signals signals;
+            try {
+                signals = pipeline.inspect(s3.getObjectAsBytes(g -> g.bucket(props.bucket()).key(row.key())).asByteArray());
+            } catch (ImagePipeline.RejectedImage e) {
+                db.jdbc().sql("UPDATE media SET status = 'REJECTED' WHERE id = :id").param("id", mediaId).update();
+                throw new ApiException(ErrorCode.CONTENT_REJECTED);
+            }
+            var verdict = safety.screenImage(new ImageScreening(signals.hashHex(), signals.skinRatio()));
+            if (verdict.decision() == ScreeningDecision.REJECT) {
+                media.rejectScreened(mediaId, ownerUserId, verdict.reason());
+                throw new ApiException(ErrorCode.CONTENT_REJECTED, "Gambar ini tidak bisa dikirim.");
             }
             db.jdbc().sql("UPDATE media SET status = 'READY', size_bytes = :s WHERE id = :id AND status = 'PENDING_UPLOAD'")
                     .param("s", actual).param("id", mediaId).update();

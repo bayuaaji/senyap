@@ -1,5 +1,6 @@
 package app.senyap.posts;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import java.time.Instant;
 import java.util.UUID;
@@ -20,7 +21,17 @@ public record PostView(
         @JsonProperty("viewer_has_hearted") boolean viewerHasHearted,
         @JsonProperty("is_mine") boolean isMine,
         @JsonProperty("can_whisper") boolean canWhisper,
-        @JsonProperty("created_at") Instant createdAt) {
+        @JsonProperty("created_at") Instant createdAt,
+        @JsonProperty("support_card") @JsonInclude(JsonInclude.Include.NON_NULL) Boolean supportCard) {
+
+    /**
+     * {@code support_card = true} hanya di respons membuat post, bila tulisan terdeteksi berisiko menyakiti diri
+     * (FS-08): client menampilkan kartu bantuan ke penulis. Tidak pernah dikirim ke viewer lain.
+     */
+    public PostView withSupportCard() {
+        return new PostView(id, author, body, category, background, city, heartCount, replyCount, viewerHasHearted,
+                isMine, canWhisper, createdAt, Boolean.TRUE);
+    }
 
     /** Alias penulis. {@code publicId} null bila akun sudah di-purge (ditampilkan "[dihapus]"). */
     public record Author(@JsonProperty("public_id") UUID publicId, @JsonProperty("name") String name,

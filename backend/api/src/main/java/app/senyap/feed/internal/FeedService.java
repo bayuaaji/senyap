@@ -119,10 +119,26 @@ class FeedService {
         } else {
             ids = posts.feedPostIds(query.apply(Cursor.decode(cursor).getLong("id")));
         }
+        ids = mergeOwnHeld(ids, posts.authorOnlyPostIds(query.apply(cursor == null ? null
+                : Cursor.decode(cursor).getLong("id")), viewer), n + 1);
         boolean more = ids.size() > n;
         var page = more ? ids.subList(0, n) : ids;
         String next = more ? Cursor.of("id", Long.toString(page.getLast())).encode() : null;
         return new CursorPage<>(posts.renderPosts(page, viewer), next);
+    }
+
+    /**
+     * Post {@code AUTHOR_ONLY} milik viewer (shadow restriction / ditahan moderasi) digabung ke daftar bersama,
+     * supaya bagi penulisnya feed terlihat normal. Urut ID turun (= waktu), tanpa duplikat.
+     */
+    static List<Long> mergeOwnHeld(List<Long> shared, List<Long> own, int limit) {
+        if (own.isEmpty()) {
+            return shared;
+        }
+        var merged = new java.util.TreeSet<Long>(java.util.Comparator.reverseOrder());
+        merged.addAll(shared);
+        merged.addAll(own);
+        return merged.stream().limit(limit).toList();
     }
 
     private List<Long> cachedFirstPage(String key, java.util.function.Supplier<List<Long>> loader) {

@@ -10,7 +10,10 @@ import app.senyap.identity.AccountStanding;
 import app.senyap.identity.AccountStatus;
 import app.senyap.identity.IdentityApi;
 import app.senyap.media.DmMediaApi;
+import app.senyap.safety.ContentType;
 import app.senyap.safety.SafetyApi;
+import app.senyap.safety.ScreeningDecision;
+import app.senyap.safety.TextScreening;
 import app.senyap.shared.db.ModuleDatabase;
 import app.senyap.shared.error.ApiException;
 import app.senyap.shared.error.ErrorCode;
@@ -84,6 +87,8 @@ class ChatService {
         if (text.isEmpty() || text.length() > OPENING_MAX) {
             throw new ApiException(ErrorCode.VALIDATION_FAILED, "Pesan pembuka 1–500 karakter.");
         }
+        requireWriter(me);
+        screen(text);
         var existing = db.jdbc().sql("""
                         SELECT c.id, d.client_msg_id FROM conversations c
                         LEFT JOIN message_dedup d ON d.conversation_id = c.id AND d.sender_id = :me AND d.seq = 1
@@ -339,6 +344,8 @@ class ChatService {
         if (!safety.blockedEitherWay(me, List.of(c.peerOf(me))).isEmpty()) {
             throw new ApiException(ErrorCode.CONVERSATION_CLOSED);
         }
+        requireWriter(me);
+        boolean supportCard = screen(text);
         int perMinute = switch (standing(me).tier(Instant.now())) {
             case NEW -> 30;
             case NORMAL -> 60;
@@ -372,7 +379,8 @@ class ChatService {
                     .param("me", me).param("seq", seq).param("c", conversationId).update();
             outbox.append("message.created", Long.toString(conversationId),
                     Map.of("conversation_id", conversationId, "seq", seq));
-            return new Sent(new Ack(clientMsgId, Tsid.toString(conversationId), seq, ChatViews.minute(now)), false);
+            return new Sent(new Ack(clientMsgId, Tsid.toString(conversationId), seq, ChatViews.minute(now),
+                    supportCard ? Boolean.TRUE : null), false);
         });
         if (sent == null) {
             return new Sent(dedup(conversationId, me, clientMsgId)
@@ -388,7 +396,7 @@ class ChatService {
                         WHERE conversation_id = :c AND sender_id = :me AND client_msg_id = :m AND seq > 0""")
                 .param("c", conversationId).param("me", me).param("m", clientMsgId)
                 .query((rs, n) -> new Ack(clientMsgId, Tsid.toString(conversationId), rs.getLong(1),
-                        ChatViews.minute(ChatRows.instant(rs, "created_at"))))
+                        ChatViews.minute(ChatRows.instant(rs, "created_at")), null))
                 .optional();
     }
 
@@ -485,6 +493,26 @@ class ChatService {
                 .query((rs, n) -> Conversation.map(rs)).optional()
                 .filter(c -> !(c.status() == Status.DECLINED && c.recipientId() == me))
                 .orElseThrow(() -> new ApiException(ErrorCode.NOT_FOUND));
+    }
+
+    /** SUSPENDED tidak boleh memulai Bisik atau mengirim pesan (FS-09). Tidak di-cache: sanksi berlaku segera. */
+    private void requireWriter(long me) {
+        var st = identity.findStandings(List.of(me)).get(me);
+        if (st == null || !st.canWrite()) {
+            throw new ApiException(ErrorCode.FORBIDDEN, "Akunmu sedang ditangguhkan, jadi belum bisa mengirim pesan.");
+        }
+    }
+
+    /** FS-08: kata terlarang → CONTENT_REJECTED. Klasifikasi DM lainnya asinkron (worker safety). @return kartu bantuan */
+    private boolean screen(String text) {
+        if (text == null || text.isBlank()) {
+            return false;
+        }
+        var v = safety.screenText(new TextScreening(ContentType.MESSAGE, text));
+        if (v.decision() == ScreeningDecision.REJECT) {
+            throw new ApiException(ErrorCode.CONTENT_REJECTED, v.message());
+        }
+        return v.selfHarm();
     }
 
     private AccountStanding standing(long userId) {

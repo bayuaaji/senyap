@@ -51,6 +51,9 @@ void main() {
 
     await tester.tap(find.byIcon(Icons.settings_outlined));
     await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(find.text('Hapus akun'), 100);
+    await tester.drag(find.byType(ListView).last, const Offset(0, -200));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Hapus akun'));
     await tester.pumpAndSettle();
 

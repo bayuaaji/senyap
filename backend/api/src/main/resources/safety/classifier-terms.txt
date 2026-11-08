@@ -1,0 +1,40 @@
+# Istilah untuk klasifikasi teks heuristik lokal (HeuristicClassifier, pengganti sementara API moderasi).
+# Format: <label>|<skor 0-1>|<frasa>. Pencocokan setelah normalisasi yang sama dengan blocked-words.txt,
+# per kata utuh. Label: self_harm, threat, sexual, minor_safety, hate, harassment.
+# Skor >= 0.85 → ditahan (HOLD) + antrean; >= 0.5 → terbit + antrean (FLAG).
+# self_harm tidak pernah menahan konten: hanya kartu bantuan + antrean P0.
+# PERLU DIKURASI sebelum rilis; ini bukan model moderasi.
+self_harm|0.9|bunuh diri
+self_harm|0.9|ingin mati
+self_harm|0.9|pengen mati
+self_harm|0.9|pingin mati
+self_harm|0.9|mau mati aja
+self_harm|0.9|akhiri hidup
+self_harm|0.9|mengakhiri hidup
+self_harm|0.9|menyakiti diri
+self_harm|0.9|nyakitin diri
+self_harm|0.9|self harm
+self_harm|0.9|selfharm
+self_harm|0.9|gak mau hidup lagi
+self_harm|0.9|tidak ingin hidup lagi
+threat|0.9|aku bunuh kamu
+threat|0.9|gue bunuh lo
+threat|0.9|gw bunuh lo
+threat|0.9|kubunuh kau
+threat|0.9|bakal kubunuh
+threat|0.9|kubakar rumahmu
+threat|0.9|tak bacok
+threat|0.6|awas kamu ya
+threat|0.6|tunggu pembalasanku
+sexual|0.7|open bo
+sexual|0.7|vcs
+sexual|0.7|jual video
+sexual|0.6|bugil
+sexual|0.6|telanjang
+sexual|0.6|sange
+minor_safety|0.95|bocil sange
+minor_safety|0.95|anak sd telanjang
+minor_safety|0.9|cari bocil
+harassment|0.6|dasar jelek
+harassment|0.6|mending mati aja kamu
+hate|0.7|bunuh semua

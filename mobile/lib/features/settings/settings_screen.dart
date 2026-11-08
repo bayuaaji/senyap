@@ -6,8 +6,10 @@ import '../../core/auth/session.dart';
 import '../onboarding/onboarding_scaffold.dart';
 import '../profile/alias_avatar.dart';
 import '../profile/alias_editor.dart';
+import 'blocks_screen.dart';
+import 'legal_screen.dart';
 
-/// Pengaturan profil: alias (ganti maks. 1× per 7 hari), keluar, hapus akun.
+/// Pengaturan profil: alias (ganti maks. 1× per 7 hari), daftar blokir, dokumen legal, keluar, hapus akun.
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
 
@@ -34,6 +36,20 @@ class SettingsScreen extends ConsumerWidget {
             enabled: profile != null && changeableAt == null,
             onTap: () => _changeAlias(context, ref),
           ),
+          ListTile(
+            key: const Key('settings-blocks'),
+            leading: const Icon(Icons.block),
+            title: const Text('Akun yang diblokir'),
+            onTap: () => _push(context, const BlocksScreen()),
+          ),
+          const Divider(),
+          for (final doc in LegalDoc.values)
+            ListTile(
+              key: Key('legal-${doc.name}'),
+              leading: const Icon(Icons.description_outlined),
+              title: Text(doc.title),
+              onTap: () => _push(context, LegalScreen(doc: doc)),
+            ),
           const Divider(),
           ListTile(
             leading: const Icon(Icons.logout),
@@ -49,6 +65,9 @@ class SettingsScreen extends ConsumerWidget {
       ),
     );
   }
+
+  static Future<void> _push(BuildContext context, Widget screen) =>
+      Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => screen));
 
   static String _date(DateTime d) {
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];

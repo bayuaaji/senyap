@@ -32,4 +32,11 @@ public interface PostsApi {
      * viewer (dihapus, {@code HIDDEN}, {@code AUTHOR_ONLY} milik orang lain) dibuang dari hasil.
      */
     List<PostView> renderPosts(List<Long> postIds, long viewerUserId);
+
+    /**
+     * Post {@code AUTHOR_ONLY} (shadow-restricted / ditahan moderasi otomatis) milik {@code viewerUserId} yang cocok
+     * dengan query, terbaru dulu. Feed menggabungkannya ke halaman viewer itu supaya penulis tetap melihat
+     * kontennya seperti biasa (FS-08: "hanya terlihat oleh dirinya sendiri").
+     */
+    List<Long> authorOnlyPostIds(FeedQuery query, long viewerUserId);
 }

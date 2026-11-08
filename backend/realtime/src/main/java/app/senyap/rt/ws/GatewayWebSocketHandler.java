@@ -137,6 +137,9 @@ class GatewayWebSocketHandler implements WebSocketHandler {
                 d.put("conversation_id", r.body().get("conversation_id").asString());
                 d.put("seq", r.body().get("seq").asLong());
                 d.put("created_at", r.body().get("created_at").asString());
+                if (r.body().path("support_card").asBoolean(false)) {
+                    d.put("support_card", true); // FS-08: kartu bantuan untuk pengirim
+                }
                 s.emit(WsFrame.of(FrameType.MSG_ACK, in.id(), d));
             } else {
                 apiError(s, in, r);

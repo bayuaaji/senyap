@@ -74,7 +74,9 @@ cd mobile && flutter analyze && flutter test
 - Health: `curl localhost:8180/actuator/health` (detail per DataSource modul, Redis, MinIO), `curl localhost:8190/actuator/health`.
 - Satu test: `./mvnw -pl api -am test -Dtest='CursorTest' -Dsurefire.failIfNoSpecifiedTests=false`.
   Integration test (`*IT`) jalan di fase `verify` lewat failsafe: `./mvnw -pl api -am verify -Dit.test='OutboxRelayIT' -Dtest=none -Dsurefire.failIfNoSpecifiedTests=false`.
-- `flutter run` belum bisa: Xcode/Android SDK belum terpasang. Base URL API: `--dart-define=SENYAP_API_URL=...` (default `http://localhost:8180`).
+- Konsol moderator (Fase 4): `http://localhost:8180/admin` (login dev di profil local/test; produksi OIDC, peran `senyap-moderator`/`senyap-legal`).
+- Bila Maven gagal mengunduh dependensi: `MAVEN_OPTS=-Djava.net.preferIPv4Stack=true`.
+- `flutter run` di simulator iOS sudah bisa (Xcode terpasang). Base URL API: `--dart-define=SENYAP_API_URL=...` (default `http://localhost:8180`).
 - Login lokal: OTP mock, kode selalu `000000` (profil local/test), tidak ada SMS. Contoh:
   `curl -XPOST localhost:8180/v1/auth/otp -H 'Content-Type: application/json' -d '{"phone":"081200000001"}'`, lalu
   `POST /v1/auth/verify` dengan `{"phone","code":"000000","device":{"platform":"ios"},"age_confirmed":true}`.

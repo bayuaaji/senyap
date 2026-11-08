@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/api_error.dart';
 import '../../core/time/relative_time.dart';
+import '../safety/safety_actions.dart';
+import '../safety/safety_repository.dart';
 import '../whisper/whisper_entry.dart';
 import 'post_card.dart';
 import 'post_models.dart';
@@ -85,6 +87,7 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
       final reply = await _repo.reply(widget.postId, text);
       if (!mounted) return;
       _input.clear();
+      if (reply.supportCard) showSupportCard(context, ref);
       setState(() {
         if (_repliesDone) _replies.add(reply);
         final p = _post;
@@ -140,6 +143,10 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
         case 'unhide':
           await _repo.setReplyHidden(reply.id, action == 'hide');
           await _refresh();
+        case 'report':
+          await showReportSheet(context, ref, SafetyTarget.reply, reply.id, onBlocked: _refresh);
+        case 'block':
+          await confirmBlock(context, ref, SafetyTarget.reply, reply.id, onBlocked: _refresh);
       }
     } catch (e) {
       _toast(e);
@@ -170,7 +177,10 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
                           post: post,
                           onHeart: _toggleHeart,
                           onWhisper: () => openWhisper(context, type: WhisperOriginType.post, originId: post.id, excerpt: post.body),
-                          onMore: post.isMine ? _deletePost : null,
+                          onMore: post.isMine
+                              ? _deletePost
+                              : () => showSafetyMenu(context, ref, SafetyTarget.post, post.id,
+                                  onBlocked: () => Navigator.of(context).pop(true)),
                         );
                       }
                       if (i == 1) {
@@ -257,6 +267,10 @@ class ReplyTile extends StatelessWidget {
         reply.isHidden
             ? const PopupMenuItem(value: 'unhide', child: Text('Tampilkan lagi'))
             : const PopupMenuItem(value: 'hide', child: Text('Sembunyikan')),
+      if (!reply.isMine && reply.author.publicId != null) ...[
+        const PopupMenuItem(value: 'report', child: Text('Laporkan')),
+        const PopupMenuItem(value: 'block', child: Text('Blokir')),
+      ],
     ];
     return Opacity(
       opacity: reply.isHidden ? 0.5 : 1,

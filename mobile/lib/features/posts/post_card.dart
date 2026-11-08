@@ -144,6 +144,7 @@ class PostCard extends StatelessWidget {
                     Text(postCategories[post.category] ?? post.category, style: _light.copyWith(fontSize: 12)),
                     if (onMore != null)
                       IconButton(
+                        key: const Key('post-more'),
                         tooltip: 'Lainnya',
                         onPressed: onMore,
                         icon: const Icon(Icons.more_vert, color: Colors.white),

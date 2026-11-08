@@ -2,6 +2,10 @@ package app.senyap.media.internal;
 
 import app.senyap.media.Background;
 import app.senyap.media.MediaApi;
+import app.senyap.safety.ImageScreening;
+import app.senyap.safety.ImageVerdict;
+import app.senyap.safety.SafetyApi;
+import app.senyap.safety.ScreeningDecision;
 import app.senyap.shared.db.ModuleDatabase;
 import app.senyap.shared.error.ApiException;
 import app.senyap.shared.error.ErrorCode;
@@ -52,11 +56,14 @@ class MediaService implements MediaApi {
     private final MediaStorageProperties storage;
     private final MediaProperties props;
     private final ImagePipeline pipeline;
-    private final RateLimiter rateLimiter;
+    private final UploadQuota quota;
+    private final SafetyApi safety;
 
     MediaService(@Qualifier("mediaDatabase") ModuleDatabase db, @Qualifier("mediaOutbox") OutboxWriter outbox,
                  Tsid tsid, S3Client s3, S3Presigner presigner, MediaStorageProperties storage, MediaProperties props,
-                 ImagePipeline pipeline, RateLimiter rateLimiter) {
+                 ImagePipeline pipeline, UploadQuota quota, SafetyApi safety) {
+        this.quota = quota;
+        this.safety = safety;
         this.db = db;
         this.outbox = outbox;
         this.tsid = tsid;
@@ -65,7 +72,6 @@ class MediaService implements MediaApi {
         this.storage = storage;
         this.props = props;
         this.pipeline = pipeline;
-        this.rateLimiter = rateLimiter;
     }
 
     // ---- upload --------------------------------------------------------------------------------
@@ -78,14 +84,7 @@ class MediaService implements MediaApi {
             throw new ApiException(ErrorCode.VALIDATION_FAILED,
                     "Ukuran gambar maksimal " + (props.maxUploadBytes() / (1024 * 1024)) + " MB.");
         }
-        boolean newAccount = Tsid.timestampOf(userId).isAfter(Instant.now().minus(Duration.ofHours(24)));
-        try {
-            rateLimiter.hit("media:upload:" + userId,
-                    newAccount ? props.uploadsPerDayNewAccount() : props.uploadsPerDay(), Duration.ofDays(1));
-        } catch (ApiException e) {
-            throw ApiException.quotaExceeded("UPLOAD", "Kamu sudah mencapai batas upload gambar hari ini.",
-                    e.retryAfter());
-        }
+        quota.hit("media:upload:", userId);
 
         long id = tsid.next();
         String key = "uploads/" + id;
@@ -167,10 +166,16 @@ class MediaService implements MediaApi {
             deleteQuietly(row.originalKey());
             return;
         }
+        // FS-08: hash matching + klasifikasi gambar asli (sebelum blur).
+        var verdict = safety.screenImage(new ImageScreening(out.originalHashHex(), out.skinRatio()));
+        if (verdict.decision() == ScreeningDecision.REJECT) {
+            rejectScreened(mediaId, row.ownerId(), verdict.reason());
+            deleteQuietly(row.originalKey());
+            return;
+        }
         String displayKey = "public/bg/" + mediaId + ".jpg";
         s3.putObject(p -> p.bucket(storage.bucket()).key(displayKey).contentType("image/jpeg")
                 .cacheControl("public, max-age=31536000, immutable"), RequestBody.fromBytes(out.jpeg()));
-        // Moderasi gambar otomatis belum ada (FS-08, Fase 4): dicatat SKIPPED supaya bisa diproses ulang nanti.
         db.jdbc().sql("""
                         UPDATE media SET status = 'READY', display_key = :key, width = :w, height = :h,
                                blurhash = :bh, perceptual_hash = :ph, moderation = CAST(:mod AS jsonb),
@@ -178,7 +183,7 @@ class MediaService implements MediaApi {
                         WHERE id = :id AND status = 'PROCESSING'""")
                 .param("id", mediaId).param("key", displayKey).param("w", out.width()).param("h", out.height())
                 .param("bh", out.blurhash()).param("ph", out.perceptualHash())
-                .param("mod", "{\"status\":\"SKIPPED\"}")
+                .param("mod", "{\"status\":\"PASSED\",\"classifier\":\"heuristic\"}")
                 .param("variants", "{\"display\":{\"key\":\"%s\",\"width\":%d,\"height\":%d}}"
                         .formatted(displayKey, out.width(), out.height()))
                 .update();
@@ -204,6 +209,26 @@ class MediaService implements MediaApi {
                 .param("id", mediaId)
                 .param("mod", "{\"status\":\"REJECTED\",\"reason\":\"" + reason.replace("\"", "") + "\"}")
                 .update();
+    }
+
+    /**
+     * Ditolak moderasi gambar. {@code KNOWN_HASH} juga menerbitkan {@code media.rejected} (satu transaksi) →
+     * safety membuat laporan P0 dan men-suspend akun (prosedur eskalasi P0).
+     */
+    void rejectScreened(long mediaId, Long ownerId, String reason) {
+        log.info("Media {} ditolak moderasi: {}", mediaId, reason);
+        db.tx().executeWithoutResult(s -> {
+            int n = db.jdbc().sql("""
+                            UPDATE media SET status = 'REJECTED', moderation = CAST(:mod AS jsonb), processed_at = now()
+                            WHERE id = :id AND status IN ('PROCESSING', 'PENDING_UPLOAD')""")
+                    .param("id", mediaId)
+                    .param("mod", "{\"status\":\"REJECTED\",\"reason\":\"" + reason + "\"}")
+                    .update();
+            if (n == 1 && ownerId != null && ImageVerdict.KNOWN_HASH.equals(reason)) {
+                outbox.append("media.rejected", Long.toString(mediaId),
+                        Map.of("media_id", mediaId, "owner_id", ownerId, "reason", reason));
+            }
+        });
     }
 
     private void deleteQuietly(String key) {

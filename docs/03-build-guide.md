@@ -211,7 +211,7 @@ Kerjakan dulu dengan percakapan yang dibuat lewat seed data, karena post baru ad
 - [x] Post: buat, lihat, hapus. Lokasi kasar (geohash 5 + kota).
 - [x] Feed: latest, popular (`hot_score` worker tiap 1 menit), nearby (sel + 8 tetangga), kategori.
 - [x] Balasan dengan alias akun (pembuat post diberi lencana Penulis). Hati dengan counter terbatch.
-- [ ] Tombol **Bisik** di post dan balasan → menyambung ke Fase 2. (Tombol + `PostsApi.findOrigins` sudah ada; navigasi ke layar Bisik disambung saat merge Fase 2.)
+- [x] Tombol **Bisik** di post dan balasan → menyambung ke Fase 2.
 - [x] Flutter: kartu post (teks di atas gambar, blurhash saat memuat), editor post, layar balasan.
 
 **Selesai jika:** user A membuat post, user B melihatnya di Terbaru dan Sekitar, membalas, lalu
@@ -219,14 +219,14 @@ membuka Bisik ke A dari balasan itu, dan A menerimanya.
 
 ### Fase 4 — Keselamatan (± 2 minggu) · FS-07, FS-08, FS-09 — **wajib sebelum beta**
 
-- [ ] Report dengan snapshot. Block dari konten. Filter block dua arah di feed dan chat.
-- [ ] Filter kata + pola doxxing (nomor HP, NIK, alamat) di konten publik.
-- [ ] Integrasi API moderasi teks dan gambar. Antrean berprioritas P0/P1/P2.
-- [ ] Hash matching gambar + prosedur eskalasi P0 (tertulis, dengan penanggung jawab).
-- [ ] Kartu bantuan untuk risiko menyakiti diri (hotline Indonesia, cek ulang nomornya sebelum rilis).
-- [ ] Trust score + kuota dinamis + shadow restriction.
-- [ ] Konsol moderator: antrean, detail kasus, aksi, audit log. Akses lewat SSO dan peran.
-- [ ] Halaman Syarat, Kebijakan Privasi (jelaskan A6 dan pilihan enkripsi di §7 requirements), dan Pedoman Komunitas.
+- [x] Report dengan snapshot. Block dari konten. Filter block dua arah di feed dan chat.
+- [x] Filter kata + pola doxxing (nomor HP, NIK, alamat) di konten publik.
+- [x] Integrasi API moderasi teks dan gambar. Antrean berprioritas P0/P1/P2. (Port `ModerationClassifier` + `HeuristicClassifier` mock; penyedia nyata belum dipilih.)
+- [x] Hash matching gambar + prosedur eskalasi P0 (tertulis, dengan penanggung jawab). (`docs/05-prosedur-eskalasi-p0.md`; nama penanggung jawab dan daftar hash resmi diisi user.)
+- [x] Kartu bantuan untuk risiko menyakiti diri (hotline Indonesia, cek ulang nomornya sebelum rilis). (Nomor masih `BELUM-DIVERIFIKASI`; app gagal start di produksi sampai diverifikasi.)
+- [x] Trust score + kuota dinamis + shadow restriction.
+- [x] Konsol moderator: antrean, detail kasus, aksi, audit log. Akses lewat SSO dan peran.
+- [x] Halaman Syarat, Kebijakan Privasi (jelaskan A6 dan pilihan enkripsi di §7 requirements), dan Pedoman Komunitas. (Draf; perlu konsultan hukum.)
 
 **Selesai jika:** semua skenario uji di §9 system requirements no. 5 lulus, dan moderator bisa
 memproses laporan P0 end-to-end di staging.

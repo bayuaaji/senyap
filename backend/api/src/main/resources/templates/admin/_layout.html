@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="id">
+<head th:fragment="head(title)">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title th:text="${title} + ' · Konsol Senyap'">Konsol Senyap</title>
+  <style>
+    body { font: 15px/1.5 system-ui, sans-serif; margin: 0; color: #1d1d1f; background: #f6f6f7; }
+    header { background: #24243a; color: #fff; padding: 10px 20px; display: flex; gap: 18px; align-items: center; }
+    header a { color: #fff; text-decoration: none; } header .me { margin-left: auto; opacity: .8; font-size: 13px; }
+    main { max-width: 1100px; margin: 0 auto; padding: 20px; }
+    table { width: 100%; border-collapse: collapse; background: #fff; }
+    th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid #e6e6ea; vertical-align: top; }
+    .p0 { background: #c62828; color: #fff; } .p1 { background: #ef6c00; color: #fff; } .p2 { background: #607d8b; color: #fff; }
+    .badge { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 12px; font-weight: 600; }
+    .card { background: #fff; border-radius: 8px; padding: 16px; margin-bottom: 16px; }
+    .msg { padding: 6px 10px; border-radius: 8px; margin: 4px 0; background: #eef; }
+    .msg.TERLAPOR { background: #fde7e7; } .msg.PELAPOR { background: #e7f3fd; } .msg.reported { outline: 2px solid #c62828; }
+    .muted { color: #6b6b75; font-size: 13px; } .ok { color: #2e7d32; } .error { color: #c62828; }
+    .warn { background: #fff4e5; border-left: 4px solid #ef6c00; padding: 8px 12px; }
+    textarea, select, input[type=text] { font: inherit; padding: 6px; width: 100%; box-sizing: border-box; }
+    button { font: inherit; padding: 6px 14px; }
+  </style>
+</head>
+<body>
+<header th:fragment="nav">
+  <strong>Konsol Senyap</strong>
+  <a th:href="@{/admin}">Antrean</a>
+  <a th:href="@{/admin(priority=0)}">P0</a>
+  <a th:href="@{/admin/audit}">Audit log</a>
+  <span class="me" th:text="${me} + (${legal} ? ' · legal' : '')">moderator</span>
+  <form th:action="@{/admin/logout}" method="post" style="margin:0"><button type="submit">Keluar</button></form>
+</header>
+</body>
+</html>

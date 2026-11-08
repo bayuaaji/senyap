@@ -1,0 +1,16 @@
+# Kata/frasa terlarang (FS-08): teks yang memuatnya DITOLAK dengan pesan ramah, di semua konten
+# (post, balasan, pesan Bisik). Satu entri per baris, huruf kecil. Pencocokan setelah normalisasi
+# (huruf kecil, angka-mirip-huruf 0→o 1→i 3→e 4→a 5→s 7→t @→a $→s, huruf berulang diringkas)
+# dan per kata utuh. Baris berawalan # diabaikan.
+#
+# PERLU DIKURASI tim Trust & Safety sebelum rilis. Daftar ini sengaja pendek: hanya frasa yang
+# hampir pasti bermakna eksploitasi/perdagangan orang. Kata kasar biasa TIDAK ditolak di sini
+# (ditangani klasifikasi + report), supaya curhat tidak terlalu sering ditolak.
+jual anak
+jual bayi
+jual ginjal
+video bocil
+konten bocil
+cp anak
+pedo
+pedofil

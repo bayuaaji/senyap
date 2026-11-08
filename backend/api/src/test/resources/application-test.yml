@@ -1,5 +1,7 @@
 # Profil test: URL/host diisi IntegrationTest dari Testcontainers.
 senyap:
+  admin:
+    dev-login: true
   outbox:
     poll-interval: 200ms
   db:
@@ -42,5 +44,7 @@ senyap:
     datasource:
       password: test_notifications_pw
   safety:
+    image-hash-file: classpath:safety/test-image-hashes.txt
+    image-hash-max-distance: 2
     datasource:
       password: test_safety_pw

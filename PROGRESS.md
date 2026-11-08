@@ -11,20 +11,21 @@ Diperbarui di akhir setiap sesi. Sesi baru mulai dari sini.
 | 1 Akun anonim | ✅ Selesai | 8 Nov 2026, commit `a2bfb75` |
 | 2 Bisik / DM | ✅ Selesai | 9 Nov 2026, digabung ke `main` bersama Fase 3 |
 | 3 Post, feed, balasan | ✅ Selesai | 9 Nov 2026, digabung ke `main`; tombol Bisik tersambung |
-| 4 Keselamatan | ⬜ Belum | Wajib sebelum beta |
+| 4 Keselamatan | ✅ Selesai | 9 Nov 2026, branch `fase-4-keselamatan` (belum di-merge); penyedia moderasi, hotline, penanggung jawab P0, review hukum menunggu user |
 | 5 Siap produksi | ⬜ Belum | |
 
 Checklist rinci tiap fase ada di `docs/03-build-guide.md` §4. Centang di sana saat item selesai.
 
 ## Fase yang sedang berjalan
 
-**Fase 4 — Keselamatan.** Berikutnya. Fase 2 dan 3 sudah digabung ke `main` (9 Nov 2026).
+**Fase 5 — Siap produksi.** Dikerjakan di branch `fase-5-produksi` (dari commit Fase 4), worktree `../senyap-fase-4`.
 
 ## Pertanyaan terbuka
 
-- Nomor hotline Indonesia untuk kartu bantuan risiko menyakiti diri (cek sebelum Fase 4).
+- Nomor hotline Indonesia untuk kartu bantuan (config masih `BELUM-DIVERIFIKASI`; api gagal start di produksi sampai diisi + `verified: true`).
+- Penanggung jawab P0 + jadwal jaga (`docs/05-prosedur-eskalasi-p0.md`, bagian `[ISI]`). Sumber daftar hash gambar resmi.
 - Kepatuhan hukum (PSE, UU PDP) perlu dicek dengan konsultan sebelum rilis.
-- Penyedia OTP (SMS/WhatsApp) belum dipilih. Sampai ada implementasi `OtpSender` untuk produksi, api sengaja gagal start di luar profil local/test. API moderasi teks/gambar juga belum dipilih (Fase 4).
+- Penyedia OTP (SMS/WhatsApp) belum dipilih. Sampai ada implementasi `OtpSender` untuk produksi, api sengaja gagal start di luar profil local/test. API moderasi teks/gambar juga belum dipilih (sementara `HeuristicClassifier`).
 
 ## Catatan serah terima
 
@@ -37,6 +38,21 @@ Tulis entri baru di paling atas dengan format ini:
 - Masalah / keputusan baru: …
 - Langkah berikutnya: …
 ```
+
+### 2026-11-09 — Fase 4 (penyelesaian)
+- Selesai: Flutter safety di-analyze + diuji; `assets/legal/` terdaftar di pubspec; `settings/legal_screen.dart` (pembaca Markdown sederhana tanpa package) dan `settings/blocks_screen.dart` (daftar + buka blokir) di Pengaturan; `FakeSafetyRepository` di `test/support/fakes.dart`; `test/safety_flow_test.dart` (laporkan → tawaran blokir → post hilang dari feed; blokir → buka blokir di Pengaturan; buka dokumen legal). `docs/05-prosedur-eskalasi-p0.md` (draf, bagian `[ISI]` untuk user). Spec FS-07/§5 diperbarui (`/v1/support/self-harm`, `support_card`, `seq` report MESSAGE, 403 SUSPENDED, event `media.rejected`/`user.sanctioned`). Checklist Fase 4 di build guide dicentang (dengan catatan apa yang masih mock).
+- `./mvnw verify` lulus (122 test termasuk `SafetyIT`), `flutter analyze` bersih, `flutter test` 47 lulus.
+- Catatan: test `rootBundle.loadString` langsung di `testWidgets` menggantung (bahkan dengan `runAsync`); aset legal diuji lewat layar saja.
+- Belum diverifikasi: konsol moderator di staging (belum ada staging); layar safety di simulator.
+
+### 2026-11-09 — Fase 4 (backend, sesi sebelumnya)
+- Selesai + diuji: backend Fase 4 lengkap. `./mvnw verify` LULUS (61 unit + 56 IT, termasuk `SafetyIT` 8 skenario: §9 no. 5 report→konsol + block→tidak bisa kirim, P0 end-to-end BAN + notifikasi pelapor + audit + penelusuran legal, filter kata/doxxing, kartu bantuan + antrean P0, HOLD→AUTHOR_ONLY→pulihkan/sembunyikan, shadow restriction + kuota trust rendah, trust turun saat diblokir, hash gambar → REJECTED + SUSPENDED + P0).
+  - identity: `adjustTrust`/`applySanction`/`findRecords`, `SanctionExpiryJob`, `identity/V4`. safety: `ContentDirectory` (port; posts/chat mengimplementasi → tanpa siklus), `ScreeningService` + `TextFilter` + `ModerationClassifier`/`HeuristicClassifier` + `KnownImageHashes`, `ReportService`, `BlockService`, `ModerationService` (`ModerationConsoleApi`), `SafetyEventConsumer`, `SafetyController` (`POST /v1/reports`, `POST /v1/blocks`, `GET/DELETE /v1/me/blocks`, `GET /v1/support/self-harm`), `SupportCardGuard` (gagal start di luar local/test bila hotline belum diverifikasi), `safety/V2`. posts: block dua arah di render/detail/balasan, screening sinkron, AUTHOR_ONLY untuk HOLD/RESTRICTED, `authorOnlyPostIds` digabung di feed, `support_card`. chat: screening kata terlarang, SUSPENDED → 403, `support_card` di ack (+ gateway realtime). media: dHash gambar asli + skin ratio, `media.rejected`, kuota upload per tier. admin: Spring Security `/admin/**` (login dev local/test, OIDC opsional lewat `spring.security.oauth2.client.registration.*`, peran dari klaim `groups`: `senyap-moderator`/`senyap-legal`), Thymeleaf: antrean, kasus, aksi, audit, legal.
+  - Dokumen: `docs/legal/{syarat-ketentuan,kebijakan-privasi,pedoman-komunitas}.md` (draf, ditandai perlu konsultan hukum), disalin ke `mobile/assets/legal/`.
+- Setengah jadi (Flutter, BELUM di-analyze/test): `lib/features/safety/{safety_repository,safety_actions}.dart` (laporkan, blokir, kartu bantuan dengan tanda "PERLU DICEK"), tersambung di post_detail (post + balasan), post_feed_list, compose (support_card), chat_screen (laporkan percakapan, tekan-lama pesan lawan = laporkan, `SupportCardSuggested` dari ack). `chat_engine_test.dart` mungkin perlu disesuaikan (SendAck punya field baru opsional, harusnya aman).
+- Belum: daftarkan `assets/legal/` di pubspec + layar baca dokumen legal + daftar blokir di Pengaturan; fake `SafetyRepository` di `test/support/fakes.dart` + widget test laporkan/blokir; `flutter analyze && flutter test` (sekali); `docs/05-prosedur-eskalasi-p0.md` (penanggung jawab = peran yang diisi user); perbarui spec (endpoint/event `media.rejected`, `user.sanctioned`, `report.created`, field `support_card`, `seq` di report MESSAGE, kode 403 SUSPENDED), centang checklist build guide, CLAUDE.md (konsol `http://localhost:8180/admin`, `MAVEN_OPTS=-Djava.net.preferIPv4Stack=true` bila unduh dependensi gagal).
+- Keputusan baru: HOLD otomatis = `AUTHOR_ONLY` (penulis tetap melihat) sampai moderator memutuskan; moderator sembunyikan = `HIDDEN`. Satu aksi menyelesaikan semua laporan OPEN atas konten yang sama. Report pesan: `target_id` = ID percakapan + `seq`. Konsol = server-rendered di modul admin (paling sederhana, tanpa SPA). Gambar DM kini juga lewat hash matching (EXIF gambar DM masih belum dibuang — tindak lanjut).
+- Butuh keputusan user: penyedia moderasi teks/gambar; nomor hotline (belum diverifikasi, config placeholder `BELUM-DIVERIFIKASI`); penanggung jawab P0; konsultan hukum untuk draf legal; sumber daftar hash resmi.
 
 ### 2026-11-09 — Merge Fase 2 + 3
 - Selesai: `fase-2-bisik` dan `fase-3-post` digabung ke `main`. Asal Bisik kini lewat adapter `chat/internal/PostsOriginDirectory` → `PostsApi.findOrigins`; `SeedOriginDirectory`, `DevSeedController`, `POST /v1/dev/origins` dihapus, tabel `chat.dev_origins` di-drop (`chat/V3`). Test Bisik membuat post sungguhan lewat `IntegrationTest.createPost`.

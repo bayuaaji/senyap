@@ -1,5 +1,6 @@
 package app.senyap.posts.internal;
 
+import app.senyap.identity.AccountStanding;
 import app.senyap.identity.IdentityApi;
 import app.senyap.identity.PublicIdentity;
 import app.senyap.media.Background;
@@ -11,6 +12,11 @@ import app.senyap.posts.OriginType;
 import app.senyap.posts.PostView;
 import app.senyap.posts.PostsApi;
 import app.senyap.posts.WhisperOrigin;
+import app.senyap.safety.ContentType;
+import app.senyap.safety.SafetyApi;
+import app.senyap.safety.ScreeningDecision;
+import app.senyap.safety.TextScreening;
+import app.senyap.safety.TextVerdict;
 import app.senyap.shared.db.ModuleDatabase;
 import app.senyap.shared.error.ApiException;
 import app.senyap.shared.error.ErrorCode;
@@ -56,9 +62,12 @@ class PostsService implements PostsApi {
     private final MediaApi media;
     private final RateLimiter rateLimiter;
     private final PostsProperties props;
+    private final SafetyApi safety;
 
     PostsService(@Qualifier("postsDatabase") ModuleDatabase db, @Qualifier("postsOutbox") OutboxWriter outbox,
-                 Tsid tsid, IdentityApi identity, MediaApi media, RateLimiter rateLimiter, PostsProperties props) {
+                 Tsid tsid, IdentityApi identity, MediaApi media, RateLimiter rateLimiter, PostsProperties props,
+                 SafetyApi safety) {
+        this.safety = safety;
         this.db = db;
         this.outbox = outbox;
         this.tsid = tsid;
@@ -92,9 +101,11 @@ class PostsService implements PostsApi {
             }
             city = CityLookup.nearest(geohash);
         }
-        // FS-08 (filter teks otomatis) menyusul di Fase 4; sampai saat itu post langsung PUBLIC.
-        Quotas.daily(rateLimiter, "post", userId, props.postsPerDay(), props.postsPerDayNewAccount(), "POST",
+        AccountStanding standing = writer(userId);
+        TextVerdict verdict = screen(ContentType.POST, body);
+        Quotas.daily(rateLimiter, "post", userId, standing, props.postsPerDay(), props.postsPerDayNewAccount(), "POST",
                 "Kamu sudah mencapai batas post hari ini.");
+        String visibility = initialVisibility(standing, verdict);
 
         long id = tsid.next();
         Instant now = Instant.now();
@@ -102,9 +113,11 @@ class PostsService implements PostsApi {
         String c = city;
         db.tx().executeWithoutResult(s -> {
             db.jdbc().sql("""
-                            INSERT INTO posts (id, author_id, body, bg_media_id, category, geohash, city, hot_score, created_at)
+                            INSERT INTO posts (id, author_id, body, bg_media_id, category, geohash, city, hot_score,
+                                               visibility, created_at)
                             VALUES (:id, :author, :body, :bg, :cat, :geo, :city,
-                                    log(1) + extract(epoch FROM CAST(:now AS timestamptz)) / 45000, :now)""")
+                                    log(1) + extract(epoch FROM CAST(:now AS timestamptz)) / 45000, :vis, :now)""")
+                    .param("vis", visibility)
                     .param("id", id).param("author", userId).param("body", body).param("bg", req.bgMediaId())
                     .param("cat", req.category()).param("geo", g).param("city", c)
                     .param("now", Timestamp.from(now))
@@ -117,7 +130,36 @@ class PostsService implements PostsApi {
             }
             outbox.append("post.created", Long.toString(id), payload);
         });
-        return render(List.of(id), userId).getFirst();
+        PostView view = render(List.of(id), userId).getFirst();
+        return verdict.selfHarm() ? view.withSupportCard() : view;
+    }
+
+    /**
+     * Akun boleh menulis? {@code SUSPENDED} → FORBIDDEN. Dipakai post dan balasan.
+     */
+    AccountStanding writer(long userId) {
+        var standing = identity.findStandings(List.of(userId)).get(userId);
+        if (standing == null || !standing.canWrite()) {
+            throw new ApiException(ErrorCode.FORBIDDEN, "Akunmu sedang ditangguhkan, jadi belum bisa menulis.");
+        }
+        return standing;
+    }
+
+    /** FS-08 sinkron: REJECT → CONTENT_REJECTED dengan pesan ramah. */
+    TextVerdict screen(ContentType kind, String body) {
+        TextVerdict v = safety.screenText(new TextScreening(kind, body));
+        if (v.decision() == ScreeningDecision.REJECT) {
+            throw new ApiException(ErrorCode.CONTENT_REJECTED, v.message());
+        }
+        return v;
+    }
+
+    /**
+     * Shadow restriction atau ditahan moderasi otomatis (HOLD) → {@code AUTHOR_ONLY}: penulis tetap melihatnya
+     * seperti biasa, orang lain tidak, sampai moderator memutuskan (pulihkan → PUBLIC, sembunyikan → HIDDEN).
+     */
+    static String initialVisibility(AccountStanding standing, TextVerdict verdict) {
+        return standing.shadowRestricted() || verdict.decision() == ScreeningDecision.HOLD ? "AUTHOR_ONLY" : "PUBLIC";
     }
 
     PostView get(long viewerId, long postId) {
@@ -157,8 +199,20 @@ class PostsService implements PostsApi {
 
     /** {@code true} bila post terlihat oleh viewer; dipakai balasan dan hati. */
     boolean visibleTo(long postId, long viewerId) {
-        return db.jdbc().sql("SELECT 1 FROM posts WHERE id = :id AND " + VISIBLE_TO_VIEWER)
-                .param("id", postId).param("viewer", viewerId).query(Integer.class).optional().isPresent();
+        var author = db.jdbc().sql("SELECT author_id FROM posts WHERE id = :id AND " + VISIBLE_TO_VIEWER)
+                .param("id", postId).param("viewer", viewerId).query(Long.class).optional();
+        return author.isPresent() && !blocked(viewerId, author.get());
+    }
+
+    /** Penulis di antara {@code authors} yang punya block dengan viewer (arah tidak dibedakan). */
+    Set<Long> blockedAmong(long viewerId, List<Long> authors) {
+        var others = authors.stream().filter(a -> a != viewerId).distinct().toList();
+        return others.isEmpty() ? Set.of() : safety.blockedEitherWay(viewerId, others);
+    }
+
+    /** Block dua arah (FS-05 §5.2): konten saling tersembunyi; dari luar sama dengan "tidak ada". */
+    boolean blocked(long viewerId, long authorId) {
+        return authorId != viewerId && !safety.blockedEitherWay(viewerId, List.of(authorId)).isEmpty();
     }
 
     /** Pemilik post (tanpa cek visibility). */
@@ -227,6 +281,35 @@ class PostsService implements PostsApi {
     }
 
     @Override
+    public List<Long> authorOnlyPostIds(FeedQuery q, long viewerUserId) {
+        var sql = new StringBuilder("""
+                SELECT id FROM posts WHERE author_id = :viewer AND visibility = 'AUTHOR_ONLY' AND deleted_at IS NULL
+                  AND id < :before""");
+        var params = new LinkedHashMap<String, Object>();
+        params.put("viewer", viewerUserId);
+        params.put("before", q.beforeId() == null ? Long.MAX_VALUE : q.beforeId());
+        if (q.category() != null) {
+            sql.append(" AND category = :cat");
+            params.put("cat", q.category());
+        }
+        if (q.nearCell() != null) {
+            String cell = Geohash.normalize(q.nearCell());
+            if (cell == null) {
+                return List.of();
+            }
+            sql.append(" AND geohash IN (:cells)");
+            params.put("cells", Geohash.withNeighbors(cell));
+        }
+        sql.append(" ORDER BY id DESC LIMIT :limit");
+        params.put("limit", Math.clamp(q.limit(), 1, 200));
+        var spec = db.jdbc().sql(sql.toString());
+        for (var e : params.entrySet()) {
+            spec = spec.param(e.getKey(), e.getValue());
+        }
+        return spec.query(Long.class).list();
+    }
+
+    @Override
     public List<HotCandidate> hotCandidates(Instant since, int limit) {
         return db.jdbc().sql("""
                         SELECT id, hot_score FROM posts
@@ -262,6 +345,14 @@ class PostsService implements PostsApi {
         if (rows.isEmpty()) {
             return List.of();
         }
+        var blocked = safety.blockedEitherWay(viewerId,
+                rows.values().stream().map(PostRow::authorId).filter(a -> a != viewerId).distinct().toList());
+        if (!blocked.isEmpty()) {
+            rows.values().removeIf(r -> blocked.contains(r.authorId()));
+            if (rows.isEmpty()) {
+                return List.of();
+            }
+        }
         var hearted = new HashSet<>(db.jdbc().sql("SELECT post_id FROM hearts WHERE user_id = :u AND post_id IN (:ids)")
                 .param("u", viewerId).param("ids", List.copyOf(rows.keySet())).query(Long.class).list());
         Map<Long, PublicIdentity> authors = identity.resolveIdentities(
@@ -279,7 +370,7 @@ class PostsService implements PostsApi {
             Background bg = bgs.get(r.bgMediaId());
             out.add(new PostView(Tsid.toString(r.id()), author(authors.get(r.authorId())), r.body(), r.category(),
                     bg == null ? null : new PostView.BackgroundRef(bg.url(), bg.blurhash()), r.city(),
-                    r.heartCount(), r.replyCount(), hearted.contains(r.id()), mine, !mine, minute(r.createdAt())));
+                    r.heartCount(), r.replyCount(), hearted.contains(r.id()), mine, !mine, minute(r.createdAt()), null));
         }
         return out;
     }

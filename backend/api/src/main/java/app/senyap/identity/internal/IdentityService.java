@@ -1,6 +1,10 @@
 package app.senyap.identity.internal;
 
+import app.senyap.identity.AccountRecord;
+import app.senyap.identity.AccountStanding;
 import app.senyap.identity.AccountStatus;
+import app.senyap.identity.Sanction;
+import app.senyap.identity.TrustAdjustment;
 import app.senyap.identity.AccountSummary;
 import app.senyap.identity.IdentityApi;
 import app.senyap.identity.PublicIdentity;
@@ -12,7 +16,10 @@ import app.senyap.shared.security.PrincipalResolver;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import java.sql.Timestamp;
+import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
@@ -185,6 +192,121 @@ class IdentityService implements IdentityApi, PrincipalResolver {
                 .query((rs, n) -> Map.entry(rs.getLong("id"), new app.senyap.identity.AccountStanding(
                         AccountStatus.valueOf(rs.getString("status")), rs.getTimestamp("created_at").toInstant(),
                         rs.getInt("trust_score"))))
+                .list().stream().collect(Collectors.toUnmodifiableMap(Map.Entry::getKey, Map.Entry::getValue));
+    }
+
+    // ---- Fase 4: trust + sanksi ----------------------------------------------------------------
+
+    static final Duration AUTO_RESTRICT_FOR = Duration.ofDays(7);
+
+    @Override
+    public void adjustTrust(List<TrustAdjustment> adjustments) {
+        for (TrustAdjustment a : adjustments) {
+            UUID restricted = db.tx().execute(s -> {
+                int inserted = db.jdbc().sql("""
+                                INSERT INTO trust_adjustments (adjustment_key, user_id, delta) VALUES (:k, :u, :d)
+                                ON CONFLICT (adjustment_key) DO NOTHING""")
+                        .param("k", a.key()).param("u", a.userId()).param("d", a.delta()).update();
+                if (inserted == 0) {
+                    return null;
+                }
+                var row = db.jdbc().sql("""
+                                UPDATE users SET trust_score = LEAST(100, GREATEST(0, trust_score + :d))
+                                WHERE id = :u RETURNING trust_score, status, public_id""")
+                        .param("d", a.delta()).param("u", a.userId())
+                        .query((rs, n) -> new Object[] {rs.getInt(1), rs.getString(2), rs.getObject(3, UUID.class)})
+                        .optional().orElse(null);
+                if (row == null || (int) row[0] > AccountStanding.AUTO_RESTRICT_AT || !"ACTIVE".equals(row[1])) {
+                    return null;
+                }
+                db.jdbc().sql("UPDATE users SET status = 'RESTRICTED', sanction_until = :until WHERE id = :u")
+                        .param("until", Timestamp.from(Instant.now().plus(AUTO_RESTRICT_FOR))).param("u", a.userId())
+                        .update();
+                outbox.append("user.sanctioned", Long.toString(a.userId()), Map.of("user_id", a.userId(),
+                        "status", "RESTRICTED", "actor", "AUTO"));
+                return (UUID) row[2];
+            });
+            if (restricted != null) {
+                principals.invalidate(restricted);
+            }
+        }
+    }
+
+    @Override
+    public void applySanction(long userId, Sanction sanction) {
+        AccountStatus status = sanction.status();
+        if (status == AccountStatus.DELETED) {
+            throw new IllegalArgumentException("DELETED bukan sanksi");
+        }
+        Instant until = status == AccountStatus.RESTRICTED || status == AccountStatus.SUSPENDED ? sanction.until() : null;
+        UUID publicId = db.tx().execute(s -> {
+            var pub = db.jdbc().sql("""
+                            UPDATE users SET status = :st, sanction_until = :until
+                            WHERE id = :u AND status <> 'DELETED' RETURNING public_id""")
+                    .param("st", status.name()).param("until", until == null ? null : Timestamp.from(until))
+                    .param("u", userId).query(UUID.class).optional();
+            pub.ifPresent(p -> outbox.append("user.sanctioned", Long.toString(userId),
+                    Map.of("user_id", userId, "status", status.name(), "actor", "MODERATOR")));
+            return pub.orElse(null);
+        });
+        if (publicId != null) {
+            principals.invalidate(publicId);
+        }
+    }
+
+    /** Job worker: sanksi berbatas waktu yang sudah lewat → {@code ACTIVE}. */
+    int expireSanctions(int batch) {
+        var expired = db.jdbc().sql("""
+                        SELECT id, public_id FROM users
+                        WHERE sanction_until IS NOT NULL AND sanction_until < now() AND status IN ('RESTRICTED', 'SUSPENDED')
+                        ORDER BY sanction_until LIMIT :n""")
+                .param("n", batch)
+                .query((rs, n) -> Map.entry(rs.getLong(1), rs.getObject(2, UUID.class))).list();
+        for (var e : expired) {
+            db.tx().executeWithoutResult(s -> {
+                int n = db.jdbc().sql("""
+                                UPDATE users SET status = 'ACTIVE', sanction_until = NULL
+                                WHERE id = :u AND sanction_until < now() AND status IN ('RESTRICTED', 'SUSPENDED')""")
+                        .param("u", e.getKey()).update();
+                if (n == 1) {
+                    outbox.append("user.sanctioned", Long.toString(e.getKey()),
+                            Map.of("user_id", e.getKey(), "status", "ACTIVE", "actor", "AUTO"));
+                }
+            });
+            principals.invalidate(e.getValue());
+        }
+        return expired.size();
+    }
+
+    @Override
+    public Map<Long, AccountRecord> findRecords(List<Long> userIds) {
+        if (userIds.isEmpty()) {
+            return Map.of();
+        }
+        var history = new HashMap<Long, List<String>>();
+        db.jdbc().sql("""
+                        SELECT user_id, alias_name, alias_tag FROM alias_history WHERE user_id IN (:ids)
+                        ORDER BY valid_from DESC""")
+                .param("ids", List.copyOf(userIds))
+                .query(rs -> {
+                    history.computeIfAbsent(rs.getLong(1), k -> new ArrayList<>())
+                            .add(rs.getString(2) + " #" + rs.getString(3));
+                });
+        return db.jdbc().sql("""
+                        SELECT id, public_id, alias_name, alias_tag, status, trust_score, phone_hmac, created_at,
+                               sanction_until
+                        FROM users WHERE id IN (:ids)""")
+                .param("ids", List.copyOf(userIds))
+                .query((rs, n) -> {
+                    long id = rs.getLong("id");
+                    var until = rs.getTimestamp("sanction_until");
+                    return Map.entry(id, new AccountRecord(id, rs.getObject("public_id", UUID.class),
+                            rs.getString("alias_name") + " #" + rs.getString("alias_tag"),
+                            AccountStatus.valueOf(rs.getString("status")), rs.getInt("trust_score"),
+                            HexFormat.of().formatHex(rs.getBytes("phone_hmac")),
+                            rs.getTimestamp("created_at").toInstant(), until == null ? null : until.toInstant(),
+                            List.copyOf(history.getOrDefault(id, List.of()))));
+                })
                 .list().stream().collect(Collectors.toUnmodifiableMap(Map.Entry::getKey, Map.Entry::getValue));
     }
 }

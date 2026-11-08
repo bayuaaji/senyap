@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="id">
+<head th:replace="~{admin/_layout :: head('Audit log')}"></head>
+<body>
+<header th:replace="~{admin/_layout :: nav}"></header>
+<main>
+  <h1>Audit log</h1>
+  <table>
+    <thead><tr><th>Waktu</th><th>Moderator</th><th>Aksi</th><th>Kasus</th><th>Detail</th></tr></thead>
+    <tr th:each="a : ${items}">
+      <td class="muted" th:text="${#temporals.format(a.createdAt(), 'yyyy-MM-dd HH:mm:ss', 'Asia/Jakarta')}"></td>
+      <td th:text="${a.actor()}"></td><td th:text="${a.action()}"></td>
+      <td><a th:if="${a.reportId()}" th:href="@{/admin/cases/{id}(id=${a.reportId()})}" th:text="${a.reportId()}"></a></td>
+      <td th:text="${a.detail()}"></td>
+    </tr>
+  </table>
+  <p th:if="${next}"><a th:href="@{/admin/audit(before=${next})}">Berikutnya →</a></p>
+</main>
+</body>
+</html>

@@ -397,6 +397,14 @@ Endpoint: `wss://rt.senyap.app/v1/ws?token=<access_token>`. Semua frame berbentu
 | POST | `/v1/blocks` `{target_type, target_id}` (server menentukan akun di baliknya) |
 | GET | `/v1/me/blocks` (daftar block, ditampilkan dengan alias & tanggal saja) |
 | DELETE | `/v1/me/blocks/{block_id}` |
+| GET | `/v1/support/self-harm` → `{title, message, verified, hotlines:[{name, contact, hours?}]}` (`verified=false` → client menandai "perlu dicek") |
+
+Catatan implementasi (Fase 4):
+- `target_type`: `POST`, `REPLY`, `MESSAGE`, `CONVERSATION`. Untuk `MESSAGE`, `target_id` = ID percakapan + field `seq`.
+- Konten baru yang memicu deteksi risiko menyakiti diri: respons buat post/balasan dan ack `msg.send` membawa `support_card: true`.
+- Akun `SUSPENDED` yang menulis → 403 `FORBIDDEN`. HOLD otomatis dari klasifikasi = `AUTHOR_ONLY` (penulis tetap melihat) sampai moderator memutuskan; sembunyikan oleh moderator = `HIDDEN`.
+- Satu aksi moderator menyelesaikan semua laporan OPEN atas konten yang sama.
+- Konsol: server-rendered (Thymeleaf) di modul admin, `/admin/**`, peran dari klaim `groups` OIDC (`senyap-moderator`, `senyap-legal`).
 
 > Block dan report merujuk **konten** (post/balasan/pesan/percakapan), bukan user ID. Server
 > yang menerjemahkannya ke akun, sehingga client tetap tidak pernah tahu user ID.
@@ -521,7 +529,9 @@ dan consumer yang butuh isi (moderasi) membacanya dari DB.
 | `message.created` | Chat | **Delivery router**, push, moderasi | `conversation_id` |
 | `message.retracted` | Chat | Delivery router | `conversation_id` |
 | `report.created` | Safety | Antrean moderator, trust score | `target_id` |
-| `user.blocked` | Safety | Chat (tutup semua percakapan keduanya), cache filter feed | `blocker_id` |
+| `user.blocked` | Safety | Chat (tutup semua percakapan keduanya), cache filter feed, trust score | `blocker_id` |
+| `media.rejected` | Media | Safety (`reason = known_hash` → suspend + laporan P0) | `media_id` |
+| `user.sanctioned` | Identity | Chat/posts (status penulis), notifikasi | `user_id` |
 
 Payload event chat (Fase 2): `conversation.*` = `{conversation_id, initiator_id, recipient_id}` (+ `reason` untuk declined: `DECLINED`/`EXPIRED`, `closed_by` untuk closed); `message.created`/`message.retracted` = `{conversation_id, seq}`. Pesan pembuka (`seq = 1`) tidak menerbitkan `message.created`; request diberitahukan lewat `conversation.requested`. `user.blocked` = `{blocker_id, blocked_id, conversation_id?}`. User ID hanya ada di event internal, tidak pernah ke client.
 | `user.registered` | Identity | (belum ada) | `user_id` |

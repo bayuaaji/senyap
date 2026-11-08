@@ -38,4 +38,21 @@ public interface IdentityApi {
      * trust rendah). User ID yang tidak dikenal tidak ada di map.
      */
     Map<Long, AccountStanding> findStandings(List<Long> userIds);
+
+    /**
+     * Terapkan sinyal perilaku ke trust score (FS-08). Idempotent per {@link TrustAdjustment#key()}. Skor
+     * dijepit 0–100. Akun {@code ACTIVE} yang skornya turun ke {@link AccountStanding#AUTO_RESTRICT_AT} atau
+     * lebih rendah otomatis {@code RESTRICTED} (shadow) selama 7 hari.
+     */
+    void adjustTrust(List<TrustAdjustment> adjustments);
+
+    /**
+     * Sanksi moderator/sistem (FS-09). Akun {@code DELETED} tidak diubah. Menerbitkan event
+     * {@code user.sanctioned}. {@code BANNED} langsung memutus sesi (refresh ditolak; access token paling lama
+     * sampai cache principal kedaluwarsa).
+     */
+    void applySanction(long userId, Sanction sanction);
+
+    /** Data akun untuk peran legal (permintaan hukum). Tidak untuk client app. */
+    Map<Long, AccountRecord> findRecords(List<Long> userIds);
 }

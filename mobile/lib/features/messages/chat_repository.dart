@@ -9,7 +9,16 @@ import 'chat_models.dart';
 
 /// Hasil kirim (REST atau `msg.ack`): pesan sudah tersimpan di server dengan `seq`.
 class SendAck {
-  const SendAck({required this.clientMsgId, required this.conversationId, required this.seq, required this.createdAt});
+  const SendAck({
+    required this.clientMsgId,
+    required this.conversationId,
+    required this.seq,
+    required this.createdAt,
+    this.supportCard = false,
+  });
+
+  /// Pesan terdeteksi berisiko menyakiti diri → tampilkan kartu bantuan ke pengirim (FS-08).
+  final bool supportCard;
 
   final String clientMsgId;
   final String conversationId;
@@ -21,6 +30,7 @@ class SendAck {
         conversationId: j['conversation_id'] as String,
         seq: (j['seq'] as num).toInt(),
         createdAt: DateTime.parse(j['created_at'] as String),
+        supportCard: j['support_card'] as bool? ?? false,
       );
 }
 

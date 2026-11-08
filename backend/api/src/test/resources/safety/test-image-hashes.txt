@@ -1,0 +1,2 @@
+# Khusus test: dHash gradien horizontal terang→gelap (semua bit 1). Bukan data nyata.
+ffffffffffffffff gradien-uji

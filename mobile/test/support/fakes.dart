@@ -11,6 +11,7 @@ import 'package:senyap/features/compose/background_picker.dart';
 import 'package:senyap/features/onboarding/auth_repository.dart';
 import 'package:senyap/features/posts/location_service.dart';
 import 'package:senyap/features/posts/posts_repository.dart';
+import 'package:senyap/features/safety/safety_repository.dart';
 
 import 'fake_posts.dart';
 
@@ -122,6 +123,41 @@ class EmptyChatRepository implements ChatRepository {
   dynamic noSuchMethod(Invocation invocation) => throw UnimplementedError();
 }
 
+/// Report/block di memori. [blocked] = daftar blokir yang dikembalikan `blocks()`.
+class FakeSafetyRepository implements SafetyRepository {
+  final reports = <String>[];
+  final blockCalls = <String>[];
+  final blocked = <BlockedAccount>[];
+  final unblocked = <String>[];
+
+  @override
+  Future<void> report(SafetyTarget type, String targetId, String reason, {int? seq, String? note}) async =>
+      reports.add('${type.wire}:$targetId${seq == null ? '' : '#$seq'}:$reason');
+
+  @override
+  Future<void> block(SafetyTarget type, String targetId, {int? seq}) async {
+    blockCalls.add('${type.wire}:$targetId');
+    blocked.add(BlockedAccount(id: 'b${blocked.length + 1}', name: 'Rubah Biru', tag: '1203', createdAt: DateTime.utc(2026)));
+  }
+
+  @override
+  Future<List<BlockedAccount>> blocks() async => List.of(blocked);
+
+  @override
+  Future<void> unblock(String blockId) async {
+    unblocked.add(blockId);
+    blocked.removeWhere((b) => b.id == blockId);
+  }
+
+  @override
+  Future<SupportCard> supportCard() async => const SupportCard(
+        title: 'Kamu tidak sendirian',
+        message: 'Ada yang siap mendengarkan.',
+        verified: false,
+        hotlines: [Hotline(name: 'Layanan contoh', contact: '000')],
+      );
+}
+
 Future<void> pumpApp(
   WidgetTester tester, {
   required TokenStore tokens,
@@ -130,6 +166,7 @@ Future<void> pumpApp(
   PostsRepository? posts,
   LocationService? location,
   BackgroundPicker? picker,
+  SafetyRepository? safety,
 }) async {
   await tester.pumpWidget(
     ProviderScope(
@@ -150,6 +187,9 @@ Future<void> pumpApp(
         ),
         backgroundPickerProvider.overrideWithValue(
           picker ?? FakeBackgroundPicker(),
+        ),
+        safetyRepositoryProvider.overrideWithValue(
+          safety ?? FakeSafetyRepository(),
         ),
       ],
       child: const SenyapApp(),

@@ -8,6 +8,7 @@ import '../posts/location_service.dart';
 import '../posts/post_card.dart';
 import '../posts/post_models.dart';
 import '../posts/posts_repository.dart';
+import '../safety/safety_actions.dart';
 import 'background_picker.dart';
 
 /// Editor post (functional spec FS-02): teks 1–250 karakter, kategori, latar dari galeri bawaan atau
@@ -116,6 +117,7 @@ class _ComposeScreenState extends ConsumerState<ComposeScreen> {
       _text.clear();
       setState(() => _useLocation = false);
       context.push('/post/${post.id}', extra: post);
+      if (post.supportCard) showSupportCard(context, ref);
     } catch (e) {
       _toast(ApiError.from(e).message);
     } finally {

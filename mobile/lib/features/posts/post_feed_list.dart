@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/api/api_error.dart';
+import '../safety/safety_actions.dart';
+import '../safety/safety_repository.dart';
 import '../whisper/whisper_entry.dart';
 import 'post_card.dart';
 import 'post_models.dart';
@@ -124,6 +126,10 @@ class _PostFeedListState extends ConsumerState<PostFeedList> with AutomaticKeepA
               onTap: () => _open(post),
               onHeart: () => _toggleHeart(i),
               onWhisper: () => openWhisper(context, type: WhisperOriginType.post, originId: post.id, excerpt: post.body),
+              onMore: post.isMine || post.author.publicId == null
+                  ? null
+                  : () => showSafetyMenu(context, ref, SafetyTarget.post, post.id,
+                      onBlocked: () => setState(() => _posts.removeWhere((p) => p.author.publicId == post.author.publicId))),
             );
           },
         ),

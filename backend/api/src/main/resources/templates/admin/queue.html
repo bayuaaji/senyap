@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="id">
+<head th:replace="~{admin/_layout :: head('Antrean')}"></head>
+<body>
+<header th:replace="~{admin/_layout :: nav}"></header>
+<main>
+  <h1>Antrean <span th:text="${status}">OPEN</span></h1>
+  <p>
+    <a th:href="@{/admin(status=${status})}">Semua</a> ·
+    <a th:href="@{/admin(priority=0,status=${status})}">P0</a> ·
+    <a th:href="@{/admin(priority=1,status=${status})}">P1</a> ·
+    <a th:href="@{/admin(priority=2,status=${status})}">P2</a> |
+    <a th:href="@{/admin(status='OPEN')}">Terbuka</a> ·
+    <a th:href="@{/admin(status='ACTIONED')}">Ditindak</a> ·
+    <a th:href="@{/admin(status='DISMISSED')}">Ditolak</a>
+  </p>
+  <table>
+    <thead><tr><th>Prio</th><th>Kasus</th><th>Jenis</th><th>Alasan</th><th>Sumber</th><th>Cuplikan</th><th>Laporan</th><th>Masuk</th></tr></thead>
+    <tbody>
+    <tr th:each="i : ${items}">
+      <td><span th:class="'badge p' + ${i.priority()}" th:text="'P' + ${i.priority()}">P0</span></td>
+      <td><a th:href="@{/admin/cases/{id}(id=${i.reportId()})}" th:text="${i.reportId()}">1</a></td>
+      <td th:text="${i.targetType()}">POST</td>
+      <td th:text="${i.reason()}">threat</td>
+      <td th:text="${i.source()}">USER</td>
+      <td th:text="${i.excerpt()}">…</td>
+      <td th:text="${i.reportsOnTarget()}">1</td>
+      <td class="muted" th:text="${#temporals.format(i.createdAt(), 'yyyy-MM-dd HH:mm', 'Asia/Jakarta')}">-</td>
+    </tr>
+    <tr th:if="${#lists.isEmpty(items)}"><td colspan="8" class="muted">Antrean kosong.</td></tr>
+    </tbody>
+  </table>
+  <p th:if="${next}"><a th:href="@{/admin(priority=${priority},status=${status},after=${next})}">Berikutnya →</a></p>
+</main>
+</body>
+</html>

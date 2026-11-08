@@ -1,0 +1,7 @@
+# Daftar hash perseptual (dHash 64-bit, 16 hex) materi terlarang yang dikenal (FS-08 hash matching).
+# Format: <hex16> [keterangan]. Baris berawalan # diabaikan.
+#
+# FILE INI SENGAJA KOSONG: tidak ada data nyata di repo. Untuk produksi, isi dari sumber resmi lewat
+# kerja sama dengan lembaga berwenang/penyedia (lihat docs/05-prosedur-eskalasi-p0.md), simpan di luar
+# repo, dan arahkan senyap.safety.image-hash-file ke lokasinya (mis. file:/etc/senyap/hashes.txt).
+# Catatan: daftar industri (mis. PhotoDNA/PDQ) memakai algoritma hash lain; adapter perlu disesuaikan.

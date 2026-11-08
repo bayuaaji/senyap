@@ -1,5 +1,8 @@
 # Profil local: infra dari infra/docker-compose.yml. Jangan pakai kredensial ini di luar laptop.
 senyap:
+  admin:
+    # Login dev konsol moderator (http://localhost:8180/admin). Hanya local/test; produksi pakai SSO (OIDC).
+    dev-login: true
   db:
     bootstrap:
       enabled: true

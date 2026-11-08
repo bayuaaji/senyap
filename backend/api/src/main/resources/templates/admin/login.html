@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="id">
+<head th:replace="~{admin/_layout :: head('Masuk')}"></head>
+<body>
+<main style="max-width:420px">
+  <h1>Konsol moderator</h1>
+  <p class="muted">Hanya untuk tim Trust &amp; Safety Senyap. Semua akses tercatat di audit log.</p>
+  <p th:if="${param.gagal}" class="error">Login gagal. Isi nama dan pilih minimal satu peran.</p>
+  <p th:if="${param.keluar}" class="ok">Kamu sudah keluar.</p>
+  <div class="card" th:each="id : ${sso}">
+    <a th:href="@{/oauth2/authorization/{id}(id=${id})}">Masuk dengan SSO (<span th:text="${id}">sso</span>)</a>
+  </div>
+  <div class="card" th:if="${devLogin}">
+    <div class="warn">Login dev — hanya profil local/test. Produksi wajib SSO (OIDC).</div>
+    <form th:action="@{/admin/dev-login}" method="post">
+      <p><label>Nama <input type="text" name="name" value="moderator1" required></label></p>
+      <p><label><input type="checkbox" name="roles" value="MODERATOR" checked> Moderator</label>
+         <label><input type="checkbox" name="roles" value="LEGAL"> Legal</label></p>
+      <button type="submit">Masuk (dev)</button>
+    </form>
+  </div>
+  <p th:if="${!devLogin and #lists.isEmpty(sso)}" class="error">SSO belum dikonfigurasi.</p>
+</main>
+</body>
+</html>

@@ -8,6 +8,8 @@ import 'package:image_picker/image_picker.dart';
 
 import '../../core/api/api_error.dart';
 import '../profile/alias_avatar.dart';
+import '../safety/safety_actions.dart';
+import '../safety/safety_repository.dart';
 import 'chat_engine.dart';
 import 'chat_models.dart';
 import 'chat_providers.dart';
@@ -60,6 +62,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         _reloadLocal();
       case InboxChanged():
         _reloadConversation();
+      case SupportCardSuggested(:final conversationId) when conversationId == _id:
+        showSupportCard(context, ref);
       case PeerTyping(:final conversationId) when conversationId == _id:
         setState(() => _typingUntil = DateTime.now().add(const Duration(seconds: 5)));
         Future.delayed(const Duration(seconds: 5), () {
@@ -200,6 +204,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       }
       return;
     }
+    if (!m.mine && seq != null && !m.isSystem) {
+      // Pesan lawan bicara: laporkan (snapshot 20 pesan di sekitarnya disimpan server, termasuk bila nanti ditarik).
+      await showReportSheet(context, ref, SafetyTarget.message, _id, seq: seq,
+          onBlocked: () => Navigator.of(context).maybePop());
+      return;
+    }
     if (!m.mine || seq == null || m.retracted || m.isSystem) return;
     if (DateTime.now().difference(m.createdAt) > const Duration(minutes: 11)) return;
     if (await _confirm('Tarik pesan?', 'Pesan akan diganti "Pesan ditarik" untuk kalian berdua.', 'Tarik')) {
@@ -244,6 +254,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                         'Keluar')) {
                       await _act(() => ref.read(chatRepositoryProvider).leave(_id), pop: true);
                     }
+                  case 'report':
+                    await showReportSheet(context, ref, SafetyTarget.conversation, _id,
+                        onBlocked: () => Navigator.of(context).maybePop());
                   case 'block':
                     if (await _confirm('Blokir?',
                         'Percakapan ditutup dan dia tidak bisa berbisik lagi kepadamu dari post mana pun.', 'Blokir')) {
@@ -254,6 +267,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               itemBuilder: (context) => const [
                 PopupMenuItem(value: 'hide', child: Text('Hapus dari inbox')),
                 PopupMenuItem(value: 'leave', child: Text('Keluar')),
+                PopupMenuItem(value: 'report', child: Text('Laporkan')),
                 PopupMenuItem(value: 'block', child: Text('Blokir')),
               ],
             ),
