@@ -9,7 +9,7 @@
 // pasangan dulu (MODE=seed, lihat README) supaya setup() tidak membuat puluhan ribu akun di tengah test.
 import http from 'k6/http';
 import { check, fail } from 'k6';
-import { WebSocket } from 'k6/websockets';
+import { WebSocket } from 'k6/experimental/websockets';
 import { Counter, Rate, Trend } from 'k6/metrics';
 import { SharedArray } from 'k6/data';
 import exec from 'k6/execution';
@@ -124,14 +124,15 @@ function pairFor(data, i) {
 function connect(token, onFrame) {
   const ws = new WebSocket(WS, null, { headers: { Authorization: `Bearer ${token}` } });
   let opened = false;
-  ws.onopen = () => {
+  let pinger = null;
+  ws.addEventListener('open', () => {
     opened = true;
     wsConnectFail.add(false);
-    ws.ping = setInterval(() => ws.send(JSON.stringify({ t: 'ping', id: 'p', d: {} })), 25000);
-  };
-  ws.onerror = () => { if (!opened) wsConnectFail.add(true); };
-  ws.onmessage = (e) => onFrame && onFrame(JSON.parse(e.data));
-  ws.onclose = () => clearInterval(ws.ping);
+    pinger = setInterval(() => ws.send(JSON.stringify({ t: 'ping', id: 'p', d: {} })), 25000);
+  });
+  ws.addEventListener('error', () => { if (!opened) wsConnectFail.add(true); });
+  ws.addEventListener('message', (e) => onFrame && onFrame(JSON.parse(e.data)));
+  ws.addEventListener('close', () => { if (pinger) clearInterval(pinger); });
   return ws;
 }
 
@@ -151,10 +152,11 @@ export function chat(data) {
     }
   });
   let n = 0;
+  let loop = null;
   sender.addEventListener('open', () => {
     // Mulai acak supaya pengirim tidak serempak.
     setTimeout(() => {
-      sender.loop = setInterval(() => {
+      loop = setInterval(() => {
         const id = `m${n++}`;
         pending[id] = Date.now();
         sent.add(1);
@@ -166,7 +168,7 @@ export function chat(data) {
   });
   // Tutup menjelang akhir durasi skenario.
   setTimeout(() => {
-    clearInterval(sender.loop);
+    if (loop) clearInterval(loop);
     setTimeout(() => {
       msgLost.add(Object.keys(pending).length);
       sender.close();
