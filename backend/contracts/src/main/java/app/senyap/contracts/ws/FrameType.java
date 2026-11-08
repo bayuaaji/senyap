@@ -21,6 +21,9 @@ public final class FrameType {
     public static final String ERROR = "error";
     public static final String PONG = "pong";
 
+    /** Kode penutupan WebSocket saat access token tidak berlaku lagi: client refresh token lalu sambung ulang. */
+    public static final int CLOSE_UNAUTHENTICATED = 4401;
+
     private FrameType() {
     }
 }

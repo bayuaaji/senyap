@@ -9,7 +9,7 @@ Diperbarui di akhir setiap sesi. Sesi baru mulai dari sini.
 | Dokumen (requirements, spec, guide) | ✅ Selesai | 8 Nov 2026 |
 | 0 Fondasi | ✅ Selesai | 8 Nov 2026, commit `bd1c959` |
 | 1 Akun anonim | ✅ Selesai | 8 Nov 2026, commit `a2bfb75` |
-| 2 Bisik / DM | ⏳ Berikutnya | |
+| 2 Bisik / DM | ✅ Selesai (belum di-commit) | 9 Nov 2026, branch `fase-2-bisik`; menunggu review + merge dengan Fase 3 |
 | 3 Post, feed, balasan | ⬜ Belum | |
 | 4 Keselamatan | ⬜ Belum | Wajib sebelum beta |
 | 5 Siap produksi | ⬜ Belum | |
@@ -37,6 +37,28 @@ Tulis entri baru di paling atas dengan format ini:
 - Masalah / keputusan baru: …
 - Langkah berikutnya: …
 ```
+
+### 2026-11-09 — Fase 2
+- Selesai: semua item Fase 2 di build guide §4. `./mvnw verify` lulus (contracts 2, realtime 3, api 52 unit + 41 IT); `flutter analyze` bersih, `flutter test` 21 lulus. Belum di-commit (branch `fase-2-bisik`, worktree `../senyap-fase-2`).
+  - "Selesai jika" dibuktikan `RealtimeE2EIT`: api + gateway realtime **sebagai proses terpisah** (jar) + dua klien WebSocket nyata. Dua klien chat realtime (latensi lokal kirim→terima **p50 14 ms, p95 17 ms**, 50 pesan); 5 pesan dengan ack hilang dikirim ulang (`client_msg_id` sama, dua putaran) → tersimpan sekali, seq 2–6 berurutan, penerima mendapat tepat 5 `msg.new`; gateway di-restart → 3 pesan fallback REST saat mati diambil lewat `/sync` + `after_seq`, realtime jalan lagi; penerima offline → 2 push mock `DM_MESSAGE` (collapse per percakapan, tanpa isi) lalu riwayat lengkap.
+  - **chat**: `ChatService` (request: validasi asal, self, block dua arah → `NOT_FOUND`, `ALREADY_WHISPERED`, kuota 3/20/0 per hari; accept/decline/expire 7 hari; kirim: dedup `message_dedup` → `UPDATE last_seq … RETURNING` → insert → outbox dalam satu `chatTx`, rate 30/60/10 per menit; tarik ≤ 10 menit; keluar/block → pesan SYSTEM `left` + `CLOSED`; hide; receipts → `msg.status` via Redis), `ChatQueries` (inbox/requests cursor, detail, riwayat, gap fill, sync, badge), `ChatController`, `DeliveryRouter` (Kafka `chat.events` + `safety.events`, idempotent lewat `chat.consumed_events`), `RealtimePublisher`, `ChatOutboxPump` (relay chat serial, kick setelah commit, poll 100 ms; menggantikan relay chat di scheduler bersama 500 ms), `RequestExpiryJob`. Migrasi `chat/V2`.
+  - **Port asal Bisik** `chat/OriginDirectory`; implementasi SEMENTARA `SeedOriginDirectory` (tabel `chat.dev_origins`) + `POST /v1/dev/origins` (local/test).
+  - **identity** `findStandings` + `AccountStanding`; **auth** `DeviceApi` (push target device yang masih punya sesi); **safety** `SafetyApi` + `BlockService` (minimal, event `user.blocked`); **notifications** `NotificationsApi` + `PushService` + `LoggingPushSender` (mock); **media** gambar DM (`DmMediaApi`, `/v1/media/dm-uploads`, objek privat `dm/`, presigned GET 1 jam). Kode error `CONVERSATION_PENDING`, `RETRACT_EXPIRED`.
+  - **realtime**: `RealtimeNode` (sesi lokal, presence Redis, channel `rt:node:{node}`, refresh 20 dtk, idle 75 dtk, hapus presence saat shutdown), `ChatApiClient` (meneruskan `msg.send`/receipts ke REST api dengan token user), handler (frame per sesi berurutan, typing throttle 3 dtk langsung ke node lawan, 401 → tutup 4401). **contracts** `rt/RealtimeBus`, `FrameType.CLOSE_UNAUTHENTICATED`.
+  - **mobile**: drift (SQL langsung, tanpa codegen) + drift_flutter + image_picker. `core/realtime/realtime_client.dart` (dart:io WebSocket, Bearer, ping 25 dtk, backoff 1→30 dtk ±20%, 4401 → refresh), `features/messages/` (`ChatStore` antrean + salinan pesan + status lawan, `ChatEngine` kirim berurutan + kirim ulang id sama + fallback REST + gap fill + sync saat reconnect, layar inbox/Permintaan, chat dengan ⏱/✓/✓✓/biru, terima/tolak, tarik, keluar, blokir, gambar blur sampai "Lihat", peringatan berbagi kontak sekali per percakapan, layar `/bisik/baru?origin_type=&origin_id=`). Data chat lokal dihapus saat keluar akun.
+- Masalah / keputusan baru:
+  - **Routing pakai `public_id`**: presence + node channel dikunci `public_id`; delivery router (worker api) menerjemahkan user ID → `public_id` lewat `IdentityApi` (cache). Gateway tetap tidak pernah tahu user ID dan tidak punya akses DB.
+  - **Gateway → api lewat REST dengan token user** (bukan API internal baru): validasi, rate limit, dan penulisan satu jalur dengan fallback REST.
+  - Bug Fase 1 ditemukan: atribut principal dari `HandshakeAuthFilter` tidak tersalin ke sesi WS. Handler kini membaca + memverifikasi ulang token dari header handshake.
+  - Frame ke node yang mati (gateway crash, presence masih ≤ 60 dtk) hilang dan tidak memicu push; ditutup oleh sync `last_seq` saat client reconnect. Gateway yang berhenti normal menghapus presence-nya dulu.
+  - Pesan pembuka (seq 1) tidak menerbitkan `message.created`; push request lewat `conversation.requested`. Isi pesan ditarik tetap di DB (bukti report), tidak pernah dikirim lagi.
+  - `msg.new` juga dikirim ke device lain milik pengirim (`sender: me`). Status dibaca selalu dua arah; opsi mematikan tanda dibaca dan "penerima mematikan Bisik" belum ada (belum ada pengaturan user).
+  - Urutan modul Maven: `realtime` sebelum `api` (IT e2e menjalankan jar gateway; dilewati bila jar belum ada).
+  - Sinkron saat reconnect lewat REST `POST /v1/conversations/sync`, bukan frame WS.
+  - Spec diperbarui (endpoint, bentuk respons, kode error, catatan implementasi WS, payload event, push).
+- Belum diverifikasi: `flutter run` di simulator/device (Xcode/Android SDK belum siap) — termasuk drift_flutter/sqlite di device, image_picker, WebSocket dari emulator (`--dart-define=SENYAP_RT_URL=ws://10.0.2.2:8190/v1/ws`). FCM nyata + registrasi push token di app belum ada. Manifest Android release belum punya izin INTERNET (dari Fase 0/1).
+- Catatan merge dengan Fase 3 (lihat juga `fase-2-merge-notes.md` di folder catatan sesi): adapter `PostsApi.findOrigins` → `OriginDirectory` (`@Primary`), hapus `SeedOriginDirectory`/`DevSeedController`/`dev_origins`; arahkan `openWhisper` Fase 3 ke `/bisik/baru?origin_type=…&origin_id=…&excerpt=…`; ganti `chat_time.dart` dengan `core/time/relative_time.dart`; satukan gambar DM dengan pipeline media Fase 3 dan pastikan `findBackgrounds` menolak media `dm/`.
+- Langkah berikutnya: review + commit Fase 2, merge dengan Fase 3, lalu Fase 4.
 
 ### 2026-11-08 — Fase 1 (lanjutan)
 - Selesai: keputusan user untuk pertanyaan terbuka hapus akun = **dibatalkan**. Login ulang (OTP verify) sebelum purge membatalkan penghapusan: status kembali ke status sebelum dihapus, `deleted_at` dikosongkan (job purge tidak memprosesnya), event `user.restored`, `public_id` + alias tetap. Setelah purge, nomor yang sama = akun baru. Migrasi `identity/V3` (`deleted_from_status`). IT di `AccountLifecycleIT`. Teks konfirmasi hapus akun di Flutter menyebut pembatalan.

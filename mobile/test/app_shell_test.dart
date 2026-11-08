@@ -22,7 +22,7 @@ void main() {
 
     await tester.tap(find.byIcon(Icons.chat_bubble_outline).last);
     await tester.pumpAndSettle();
-    expect(find.text('Bisikanmu akan muncul di sini.'), findsOneWidget);
+    expect(find.text('Belum ada bisikan. Tekan Bisik di sebuah post untuk memulai.'), findsOneWidget);
 
     await tester.tap(find.byIcon(Icons.settings_outlined));
     await tester.pumpAndSettle();

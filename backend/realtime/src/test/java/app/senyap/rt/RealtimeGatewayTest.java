@@ -54,6 +54,19 @@ class RealtimeGatewayTest {
         }
     }
 
+    static final org.testcontainers.containers.GenericContainer<?> REDIS =
+            new org.testcontainers.containers.GenericContainer<>("redis:7-alpine").withExposedPorts(6379);
+
+    static {
+        REDIS.start();
+    }
+
+    @org.springframework.test.context.DynamicPropertySource
+    static void redis(org.springframework.test.context.DynamicPropertyRegistry r) {
+        r.add("spring.data.redis.host", REDIS::getHost);
+        r.add("spring.data.redis.port", () -> REDIS.getMappedPort(6379));
+    }
+
     @LocalServerPort
     int port;
 
@@ -71,7 +84,7 @@ class RealtimeGatewayTest {
 
         assertThat(received).hasSize(3);
         assertThat(received.get(0)).contains("\"t\":\"pong\"").contains("\"id\":\"f1\"");
-        assertThat(received.get(1)).contains("\"t\":\"error\"").contains("\"ref_id\":\"f2\"").contains("NOT_IMPLEMENTED");
+        assertThat(received.get(1)).contains("\"t\":\"error\"").contains("\"ref_id\":\"f2\"").contains("VALIDATION_FAILED");
         assertThat(received.get(2)).contains("\"t\":\"error\"").contains("VALIDATION_FAILED");
     }
 

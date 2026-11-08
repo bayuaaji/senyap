@@ -16,7 +16,17 @@ management:
       probes:
         enabled: true
 
+spring.data.redis:
+  host: ${SENYAP_REDIS_HOST:localhost}
+  port: ${SENYAP_REDIS_PORT:6379}
+
 senyap:
   rt:
+    # REST api untuk msg.send / receipts / detail percakapan (diteruskan dengan token user).
+    api-base-url: ${SENYAP_API_URL:http://localhost:8180}
+    # Kosong = UUID acak per proses. Presence + channel Redis rt:node:{node-id}.
+    node-id: ${SENYAP_RT_NODE_ID:}
+    idle-timeout: 75s
+    presence-refresh: 20s
     # JWKS publik api untuk verifikasi access token saat handshake (aturan M12).
     jwks-uri: ${SENYAP_JWKS_URI:http://localhost:8180/.well-known/jwks.json}

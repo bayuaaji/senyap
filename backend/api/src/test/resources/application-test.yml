@@ -30,6 +30,9 @@ senyap:
     datasource:
       password: test_posts_pw
   chat:
+    request-expiry:
+      initial-delay: 1s
+      interval: 1s
     datasource:
       password: test_chat_pw
   notifications:

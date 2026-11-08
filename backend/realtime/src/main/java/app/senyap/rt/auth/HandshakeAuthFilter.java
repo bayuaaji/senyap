@@ -11,11 +11,13 @@ import reactor.core.scheduler.Schedulers;
 /**
  * Handshake {@code /v1/ws} wajib {@code Authorization: Bearer <access token>}. Token lewat query string
  * sengaja tidak didukung (bisa tercatat di log proxy). Tanpa token valid → 401 sebelum upgrade.
- * Principal disimpan di atribut exchange dan disalin ke atribut sesi WebSocket.
+ * Principal dan token mentah disimpan di atribut exchange lalu disalin ke atribut sesi WebSocket: token
+ * diteruskan gateway ke REST api atas nama user (gateway tidak punya akses DB). Token tidak pernah ditulis ke log.
  */
 public class HandshakeAuthFilter implements WebFilter {
 
     public static final String PRINCIPAL = AccessTokenVerifier.Principal.class.getName();
+    public static final String TOKEN = HandshakeAuthFilter.class.getName() + ".token";
 
     private final String path;
     private final AccessTokenVerifier verifier;
@@ -42,6 +44,7 @@ public class HandshakeAuthFilter implements WebFilter {
                         return reject(exchange);
                     }
                     exchange.getAttributes().put(PRINCIPAL, p.get());
+                    exchange.getAttributes().put(TOKEN, token);
                     return chain.filter(exchange);
                 });
     }

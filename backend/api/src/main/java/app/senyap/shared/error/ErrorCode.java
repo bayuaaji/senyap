@@ -12,6 +12,8 @@ public enum ErrorCode {
     METHOD_NOT_ALLOWED(HttpStatus.METHOD_NOT_ALLOWED, "Metode tidak didukung."),
     ALREADY_WHISPERED(HttpStatus.CONFLICT, "Kamu sudah pernah berbisik dari sini."),
     CONVERSATION_CLOSED(HttpStatus.CONFLICT, "Percakapan ini sudah ditutup."),
+    CONVERSATION_PENDING(HttpStatus.CONFLICT, "Tunggu sampai bisikanmu diterima."),
+    RETRACT_EXPIRED(HttpStatus.CONFLICT, "Pesan hanya bisa ditarik dalam 10 menit setelah dikirim."),
     CONTENT_REJECTED(HttpStatus.UNPROCESSABLE_CONTENT, "Konten ini tidak bisa dikirim."),
     ALIAS_CHANGE_TOO_SOON(HttpStatus.TOO_MANY_REQUESTS, "Alias hanya bisa diganti sekali setiap 7 hari."),
     RATE_LIMITED(HttpStatus.TOO_MANY_REQUESTS, "Terlalu sering. Coba lagi sebentar lagi."),

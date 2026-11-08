@@ -28,11 +28,12 @@ class WebSocketConfig implements WebFluxConfigurer {
         return new SimpleUrlHandlerMapping(Map.of(PATH, handler), -1);
     }
 
-    /** Principal hasil {@link HandshakeAuthFilter} ikut ke atribut sesi WebSocket. */
+    /** Principal + token hasil {@link HandshakeAuthFilter} ikut ke atribut sesi WebSocket. */
     @Override
     public WebSocketService getWebSocketService() {
         var service = new HandshakeWebSocketService();
-        service.setSessionAttributePredicate(HandshakeAuthFilter.PRINCIPAL::equals);
+        service.setSessionAttributePredicate(name ->
+                HandshakeAuthFilter.PRINCIPAL.equals(name) || HandshakeAuthFilter.TOKEN.equals(name));
         return service;
     }
 
