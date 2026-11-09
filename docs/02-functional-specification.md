@@ -19,14 +19,20 @@ Konvensi: `FS-xx` = fitur, `[MVP]` / `[v2]` = fase.
 
 ### 1.1 Aturan alias
 
-- **Dibuat sekali saat profil dibuat** (FS-01): kombinasi acak `{hewan} {warna}` (daftar ±200 × 20) + tag 4 digit acak, misalnya "Kelinci Jingga #4821".
+- **Dibuat sekali saat profil dibuat** (FS-01): kombinasi acak `{kata1} {kata2}` + tag 4 digit acak, misalnya "Kelinci Jingga #4821". Katalog kata **per gender** (keputusan 9 Nov 2026):
+  - `unspecified` (bawaan, termasuk akun lama): `{hewan} {warna}`, ±200 × 20, misalnya "Kelinci Jingga".
+  - `male` (kesan gagah): kata1 tokoh/hewan/alam (Pangeran, Ksatria, Pendekar, Elang, Naga, Garuda, Badai, Samudra, …, 36 kata) × kata2 arah/waktu/logam/unsur (Senja, Fajar, Malam, Utara, Perak, Baja, Emas, Rimba, …, 20 kata), misalnya "Pangeran Senja".
+  - `female` (kesan cantik): kata1 tokoh/bunga/burung/alam (Putri, Dewi, Bidadari, Mawar, Melati, Rembulan, Mutiara, …, 36 kata) × kata2 waktu/warna lembut/kata sifat indah (Senja, Pagi, Lavender, Salju, Jelita, Ayu, Kirana, …, 20 kata), misalnya "Putri Salju".
+  - Kata2 menentukan warna avatar (`alias_color`). Dalam satu gender kata1 dan kata2 tidak beririsan, dan kombinasi bermakna buruk (mis. "Kupu-kupu Malam") tidak mungkin terbentuk (diuji `AliasCatalogTest`).
+  - Saran (acak/pilih sendiri) memakai katalog gender user **saat ini**. Mengganti gender tidak mengubah alias yang sudah tersimpan.
 - **Unik secara global** pada pasangan `(alias_name, alias_tag)`. Kalau bentrok, acak ulang tag-nya. Tanpa tag, 4.000 kombinasi nama tidak cukup untuk jutaan user.
 - **Melekat selamanya** di semua balasan dan percakapan DM sampai user mengubahnya.
-- **Bisa diubah di pengaturan profil**: acak ulang, atau pilih sendiri `{hewan}` dan `{warna}` dari daftar (tag tetap diacak sistem). Teks bebas tidak diizinkan, supaya tidak ada nama asli, kontak, atau peniruan.
+- **Bisa diubah di pengaturan profil**: acak ulang, atau pilih sendiri `{kata1}` dan `{kata2}` dari daftar (tag tetap diacak sistem). Teks bebas tidak diizinkan, supaya tidak ada nama asli, kontak, atau peniruan.
 - Batas ganti: 1× per 7 hari. Mencegah orang yang baru di-report/di-block langsung "berganti wajah".
 - Saat alias diubah, **semua balasan dan percakapan lama ikut menampilkan alias baru**, karena alias dibaca dari akun saat render, bukan disalin ke tiap balasan/pesan.
 - Riwayat alias disimpan di `alias_history` untuk keperluan moderasi. Tidak pernah ditampilkan ke user lain.
 - Alias tampil di **post**, balasan, dan DM. Di balasan post sendiri, pembuat post tampil dengan aliasnya + lencana **Penulis**.
+- **Gender + avatar** (keputusan 9 Nov 2026) ikut tampil bersama alias di post, balasan, dan DM. Avatar dipilih dari daftar tetap emoji hewan/alam (±26, `{id, emoji}`), **bukan foto**, demi anonimitas. Keduanya boleh diganti kapan saja (tanpa batas 7 hari), dibaca dari akun saat render, dan avatar berlaku lintas gender.
 - `public_id` adalah ID acak (UUIDv4) per akun, tidak diturunkan dari `user_id`, dan tidak berubah saat alias diganti.
 
 ---
@@ -46,7 +52,7 @@ blocks, reports, moderation_actions, notifications
 
 | Schema | Tabel |
 |---|---|
-| `auth` | devices, refresh_tokens, otp_attempts |
+| `auth` | devices, refresh_tokens, otp_attempts, email_credentials, password_reset_codes |
 | `identity` | users, alias_history |
 | `media` | media |
 | `posts` | posts, replies, hearts |
@@ -62,9 +68,9 @@ yang disimpan cuma ID-nya, tanpa constraint dan tanpa JOIN.
 | Kolom | Tipe | Aturan |
 |---|---|---|
 | id | BIGINT (TSID) | PK. Tidak pernah dikirim ke client. |
-| phone_hmac | BYTEA | Unik. `HMAC-SHA256(pepper, E.164 phone)`. Nomor asli tidak disimpan. |
+| phone_hmac | BYTEA | Unik, nullable (akun email tidak punya nomor). `HMAC-SHA256(pepper, E.164 phone)`. Nomor asli tidak disimpan. |
 | public_id | UUID | Unik. Handle opaque yang dikirim ke client. |
-| alias_name | VARCHAR(40) | `{hewan} {warna}`, dari daftar tetap |
+| alias_name | VARCHAR(40) | `{kata1} {kata2}`, dari daftar tetap per gender |
 | alias_tag | CHAR(4) | 4 digit. Unik bersama `alias_name`. |
 | alias_color | CHAR(7) | Warna avatar, hex |
 | alias_changed_at | TIMESTAMPTZ | Untuk batas ganti 1× per 7 hari |
@@ -72,9 +78,13 @@ yang disimpan cuma ID-nya, tanpa constraint dan tanpa JOIN.
 | status | ENUM | `ACTIVE`, `RESTRICTED` (shadow), `SUSPENDED`, `BANNED`, `DELETED` |
 | trust_score | SMALLINT | 0–100, mulai 50 |
 | home_geohash | CHAR(5) | Opsional, untuk feed Sekitar (±5 km) |
+| gender | VARCHAR(12) | `male` / `female` / `unspecified` (default) |
+| avatar | VARCHAR(32) | Nullable. ID avatar dari daftar tetap (`AvatarCatalog`) |
 | created_at | TIMESTAMPTZ | |
 
 **devices**: `id`, `user_id`, `platform` (`ios`/`android`), `push_token`, `last_seen_at`.
+
+**email_credentials** (schema `auth`): `user_id` (PK), `email` (unik, plaintext ternormalisasi: trim + huruf kecil, lihat requirements NFR-16), `password_hash` (BCrypt), `password_changed_at`. **password_reset_codes**: `id`, `user_id`, `code_hash` (HMAC), `attempts`, `expires_at` (15 menit), `used_at`.
 
 **media**: `id`, `owner_id`, `status` (`PENDING_UPLOAD` → `PROCESSING` → `READY`/`REJECTED`),
 `original_key`, `mime_type`, `size_bytes`, `width`, `height`, `variants JSONB`, `moderation JSONB`,
@@ -154,13 +164,13 @@ Tabel dipartisi per bulan (`created_at`) supaya retensi dan purge murah.
 **Alur**
 1. Layar pembuka menjelaskan model anonimitas (A1–A6) dalam bahasa sederhana.
 2. Konfirmasi usia 18+ dan setuju syarat & kebijakan privasi.
-3. Masukkan nomor HP → OTP 6 digit via SMS/WhatsApp (berlaku 5 menit, maksimal 3 percobaan).
+3. Masukkan nomor HP → OTP 6 digit via SMS/WhatsApp (berlaku 5 menit, maksimal 3 percobaan). **Atau** daftar/masuk dengan email + kata sandi (keputusan 9 Nov 2026).
 4. Server menghitung `phone_hmac`. Kalau sudah ada, akun lama dipakai (login) dengan alias lamanya. Kalau belum, buat akun baru.
-5. **Buat profil (akun baru saja):** server mengacak alias + warna. User boleh menekan "Acak lagi" (tanpa batas di langkah ini) atau memilih `{hewan}`/`{warna}` sendiri, lalu "Pakai alias ini".
+5. **Buat profil (akun baru saja):** user memilih gender (opsional) dan avatar (opsional); server mengacak alias + warna dari katalog gender itu. User boleh menekan "Acak lagi" (tanpa batas di langkah ini) atau memilih `{kata1}`/`{kata2}` sendiri, lalu "Pakai alias ini" (`onboarded` jadi `true`).
 6. Izin lokasi (opsional) dan izin notifikasi.
 
 **Aturan**
-- Satu nomor HP = satu akun. Akun yang `BANNED` tidak bisa dibuat ulang dengan nomor yang sama.
+- Satu nomor HP = satu akun; satu email = satu akun. Akun yang `BANNED` tidak bisa dibuat ulang dengan nomor/email yang sama. Akun email dan akun nomor HP adalah akun terpisah (tidak ditautkan).
 - Nomor HP virtual/VoIP ditolak bila terdeteksi (v2, via penyedia OTP).
 - Token: access JWT 15 menit + refresh token 90 hari, dirotasi dan terikat ke device.
 - Akun baru (< 24 jam) punya batas lebih ketat (lihat §6).
@@ -169,15 +179,20 @@ Tabel dipartisi per bulan (`created_at`) supaya retensi dan purge murah.
 |---|---|---|---|
 | POST | `/v1/auth/otp` | `{phone}` | 202 |
 | POST | `/v1/auth/verify` | `{phone, code, device: {platform, push_token}, age_confirmed: true}` | 200 `{tokens, is_new}` |
+| POST | `/v1/auth/email/register` | `{email, password, device: {platform, push_token}, age_confirmed: true}` | 201 `{tokens, is_new}` (bentuk sama dengan verify). 409 `EMAIL_TAKEN`, 400 `INVALID_EMAIL` / `WEAK_PASSWORD` / `VALIDATION_FAILED` |
+| POST | `/v1/auth/email/login` | `{email, password, device}` | 200 `{tokens, is_new}`. Gagal apa pun → 401 `INVALID_CREDENTIALS` (generik) |
+| POST | `/v1/auth/email/forgot` | `{email}` | 202 selalu (terdaftar atau tidak) |
+| POST | `/v1/auth/email/reset` | `{email, code, new_password}` | 204, semua sesi dicabut. 400 `OTP_INVALID` / `WEAK_PASSWORD` |
 | POST | `/v1/auth/refresh` | `{refresh_token}` | 200 `{tokens}` |
 | POST | `/v1/auth/logout` | | 204 |
 | DELETE | `/v1/me` | `{confirm: "HAPUS"}` | 202. Purge dalam 30 hari. |
 | PATCH | `/v1/me/settings` | `{location_enabled, home_geohash, notif_*}` | 200 |
-| GET | `/v1/me/profile` | | 200 `{public_id, alias: {name, tag, color}, alias_changeable_at}` |
-| POST | `/v1/me/alias/suggest` | `{animal?, color?}` (kosong = acak penuh) | 200 `{name, tag, color, suggestion_token}`. Belum disimpan. |
+| GET | `/v1/me/profile` | | 200 `{public_id, alias: {name, tag, color}, alias_changeable_at, onboarded, gender, avatar: {id, emoji} \| null}` |
+| PUT | `/v1/me/profile` | `{gender?, avatar?}` | 200 profil (bentuk sama dengan GET). Field yang tidak dikirim tidak berubah; `avatar: null` = hapus. Boleh sebelum onboarding. |
+| POST | `/v1/me/alias/suggest` | `{first?, second?}` (kosong = acak penuh; `animal`/`color` lama tetap diterima) | 200 `{name, tag, color, suggestion_token}`. Belum disimpan. Kata harus ada di katalog gender user. |
 | PUT | `/v1/me/alias` | `{suggestion_token}` | 200 `{alias}`, atau 429 `ALIAS_CHANGE_TOO_SOON`. Batas 7 hari tidak berlaku saat onboarding. |
 | PUT | `/v1/me/device` | `{push_token}` | 204. Push token device yang sedang login (FCM/APNs merotasi token). |
-| GET | `/v1/aliases/catalog` | | 200 `{animals: [..], colors: [{name, hex}]}`. Daftar untuk "pilih sendiri". |
+| GET | `/v1/aliases/catalog?gender=male\|female\|unspecified` | | 200 `{gender, first: [..], second: [{name, hex}], avatars: [{id, emoji}]}`. Daftar untuk "pilih sendiri". Tanpa `gender` = gender user (endpoint ini wajib Bearer). |
 | GET | `/.well-known/jwks.json` | | 200 JWKS publik (tanpa auth), untuk verifikasi access token (M12). |
 
 **Detail implementasi (Fase 1)**
@@ -186,7 +201,15 @@ Tabel dipartisi per bulan (`created_at`) supaya retensi dan purge murah.
 - `POST /v1/auth/verify` untuk akun `BANNED` → 403 `FORBIDDEN`. Untuk akun `DELETED` yang belum di-purge, login ulang **membatalkan penghapusan**: akun kembali ke status sebelum dihapus (biasanya `ACTIVE`; `RESTRICTED`/`SUSPENDED` tetap berlaku), `public_id` dan alias tidak berubah, event `user.restored`. `is_new` = profil belum dibuat (alias belum dipilih), jadi tetap `true` kalau user keluar dari app di tengah onboarding.
 - Respons token: `{tokens: {access_token, refresh_token, expires_in}}`. Access token JWT ES256; `sub` = `public_id` (bukan user ID), `did` = ID device. Refresh token opaque, dirotasi setiap dipakai; token lama yang dipakai lagi di luar jeda 10 detik mencabut seluruh rantai sesi device itu.
 - `GET /v1/me/profile` juga mengembalikan `onboarded`. `alias_changeable_at` = `null` kalau alias boleh diganti sekarang.
-- `DELETE /v1/me`: semua sesi dicabut seketika; purge (nomor HP diputus dari akun) maksimal 30 hari kemudian (masa tenggang 29 hari). Login lagi sebelum purge membatalkan penghapusan. Setelah purge, nomor yang sama mendaftar sebagai akun baru. Akun `BANNED` tidak bisa dihapus.
+- `PUT /v1/me/profile` menerbitkan event `user.profile_changed` `{user_id, public_id, changed: ["gender"|"avatar"]}`. `gender` tidak valid / avatar tidak ada di daftar → 400 `VALIDATION_FAILED`.
+- **Email + kata sandi** (keputusan 9 Nov 2026), tambahan di samping OTP:
+  - Email dinormalisasi (trim + huruf kecil) dan disimpan plaintext di `auth.email_credentials` (trade-off di requirements NFR-16). Email **tidak pernah** ada di respons, log, event, atau metrik. Kata sandi: BCrypt, 8–72 karakter (72 byte UTF-8, batas BCrypt).
+  - Register membuat akun tanpa nomor HP (`phone_hmac = NULL`, gender `unspecified`). `age_confirmed` wajib `true`.
+  - Login gagal (email tak terdaftar, format salah, kata sandi salah, akun sudah di-purge) selalu 401 `INVALID_CREDENTIALS` dengan pesan sama; email tak terdaftar tetap menjalankan BCrypt atas hash dummy supaya waktu respons serupa. Akun `BANNED` → 403 `FORBIDDEN`. Akun `DELETED` yang belum di-purge **dipulihkan** saat login (sama seperti OTP, event `user.restored`).
+  - Lupa kata sandi: kode 6 digit berlaku 15 menit, maksimal 5 percobaan, hanya kode terakhir yang berlaku, dikirim lewat `EmailSender`. Lokal/test: mock yang hanya mencatat "email dikirim" (tanpa alamat, tanpa kode), kode selalu `000000`. Produksi tanpa implementasi `EmailSender` → api gagal start.
+  - Reset sukses mengganti kata sandi dan mencabut semua sesi (refresh token) user. Kode salah → 400 `OTP_INVALID` "Kode salah."; kedaluwarsa/terpakai/percobaan habis → 400 `OTP_INVALID` "Kode sudah tidak berlaku. Minta kode baru."
+  - Purge akun: consumer `user.purged` di modul auth menghapus kredensial email; email itu bisa mendaftar akun baru.
+- `DELETE /v1/me`: semua sesi dicabut seketika; purge (nomor HP / email diputus dari akun) maksimal 30 hari kemudian (masa tenggang 29 hari). Login lagi sebelum purge membatalkan penghapusan. Setelah purge, nomor yang sama mendaftar sebagai akun baru. Akun `BANNED` tidak bisa dihapus.
 
 ### FS-02 Post anonim [MVP]
 
@@ -449,7 +472,7 @@ Dijalankan oleh worker pada setiap post, balasan, pesan teks, dan gambar.
 ```json
 {
   "id": "7251234567890123456",
-  "author": { "public_id": "3f9c…", "name": "Kelinci Jingga", "tag": "4821", "color": "#F28C38" },
+  "author": { "public_id": "3f9c…", "name": "Putri Salju", "tag": "4821", "color": "#90A4AE", "gender": "female", "avatar": "🦋" },
   "body": "Aku belum bilang ke siapa-siapa kalau aku resign minggu depan.",
   "category": "kerja",
   "background": { "url": "https://cdn.senyap.app/bg/…/1080.webp", "blurhash": "LEHV6nWB2y…" },
@@ -463,7 +486,7 @@ Dijalankan oleh worker pada setiap post, balasan, pesan teks, dan gambar.
 }
 ```
 
-- `author` hanya berisi alias dan `public_id`, tidak pernah user ID. `is_mine` dan `can_whisper` dihitung di server.
+- `author` hanya berisi alias, `public_id`, `gender` (`male`/`female`/`unspecified`), dan `avatar` (emoji atau `null`), tidak pernah user ID. Bentuk yang sama dipakai untuk author balasan (+ `is_post_author`), `peer` percakapan Bisik (inbox, permintaan, detail), dan daftar blokir (`{id, name, tag, color, gender, avatar, created_at}`). Akun yang di-purge: `{public_id: null, name: "[dihapus]", tag: null, color: null|"#9E9E9E", gender: null, avatar: null}`. Pesan DM tidak membawa info pengirim selain `sender: "me"|"them"`. `is_mine` dan `can_whisper` dihitung di server.
 - `created_at` dibulatkan ke **menit**, supaya tidak bisa dicocokkan dengan aktivitas di luar app secara presisi.
 - ID dikirim sebagai string. Paginasi selalu cursor.
 
@@ -496,7 +519,11 @@ pesan DM, inbox, dan notifikasi.
 | Kode | HTTP | Kapan |
 |---|---|---|
 | `VALIDATION_FAILED` | 400 | Input tidak valid |
-| `OTP_INVALID` | 400 | Kode OTP salah, kedaluwarsa, sudah dipakai, atau percobaan habis |
+| `OTP_INVALID` | 400 | Kode OTP / kode reset kata sandi salah, kedaluwarsa, sudah dipakai, atau percobaan habis |
+| `INVALID_EMAIL` | 400 | Format email tidak valid (register) |
+| `WEAK_PASSWORD` | 400 | Kata sandi < 8 karakter atau > 72 byte |
+| `EMAIL_TAKEN` | 409 | Email sudah terdaftar (register) |
+| `INVALID_CREDENTIALS` | 401 | Login email gagal (generik, tidak membedakan penyebab) |
 | `CONTENT_REJECTED` | 422 | Ditolak filter otomatis |
 | `UNAUTHENTICATED` | 401 | Token tidak ada atau kedaluwarsa |
 | `FORBIDDEN` | 403 | Bukan pemilik resource / akun dibatasi |
@@ -537,7 +564,8 @@ dan consumer yang butuh isi (moderasi) membacanya dari DB.
 Payload event chat (Fase 2): `conversation.*` = `{conversation_id, initiator_id, recipient_id}` (+ `reason` untuk declined: `DECLINED`/`EXPIRED`, `closed_by` untuk closed); `message.created`/`message.retracted` = `{conversation_id, seq}`. Pesan pembuka (`seq = 1`) tidak menerbitkan `message.created`; request diberitahukan lewat `conversation.requested`. `user.blocked` = `{blocker_id, blocked_id, conversation_id?}`. User ID hanya ada di event internal, tidak pernah ke client.
 | `user.registered` | Identity | (belum ada) | `user_id` |
 | `user.alias_changed` | Identity | Read model alias di modul lain (M8) | `user_id` |
-| `user.deleted` / `user.restored` / `user.purged` | Identity | Posts, chat: anonimkan konten jadi "[dihapus]" saat `user.purged` (`user.restored` = penghapusan dibatalkan) | `user_id` |
+| `user.profile_changed` | Identity | (belum ada; gender/avatar dibaca saat render) `{user_id, public_id, changed}` | `user_id` |
+| `user.deleted` / `user.restored` / `user.purged` | Identity | Posts, chat: anonimkan konten jadi "[dihapus]" saat `user.purged` (`user.restored` = penghapusan dibatalkan); auth: hapus kredensial email saat `user.purged` | `user_id` |
 
 ---
 
@@ -546,7 +574,10 @@ Payload event chat (Fase 2): `conversation.*` = `{conversation_id, initiator_id,
 | Aksi | Akun baru (< 24 jam) | Akun normal | Trust rendah |
 |---|---|---|---|
 | Request OTP per nomor | 3/jam | — | — |
-| Post | 3/hari | 20/hari | 3/hari |
+| Login email (per email / per IP) | 10/jam / 30/jam | | |
+| Lupa kata sandi (per email / per IP) | 3/jam / 10/jam | | |
+| Daftar email / reset kata sandi (per IP) | 10/jam / 30/jam | | |
+| Post | 40/hari | 40/hari | 40/hari |
 | Balasan | 20/hari | 200/hari | 20/hari |
 | **Request Bisik baru** | 3/hari | 20/hari | 0 (dinonaktifkan) |
 | Pesan DM | 30/menit | 60/menit | 10/menit |

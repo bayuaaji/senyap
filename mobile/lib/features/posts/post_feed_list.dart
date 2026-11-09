@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../app/shell.dart' show navClearance;
+import '../../app/ui/ui.dart';
 import '../../core/api/api_error.dart';
 import '../safety/safety_actions.dart';
 import '../safety/safety_repository.dart';
@@ -12,10 +14,18 @@ import 'posts_repository.dart';
 
 /// Daftar post dengan paginasi cursor, tarik untuk muat ulang, dan aksi kartu (hati, Bisik, buka balasan).
 class PostFeedList extends ConsumerStatefulWidget {
-  const PostFeedList({super.key, required this.load, required this.emptyMessage});
+  const PostFeedList({
+    super.key,
+    required this.load,
+    required this.emptyMessage,
+    this.emptyTitle = 'Masih sunyi di sini',
+    this.topPadding = Space.lg,
+  });
 
   final Future<PageOf<Post>> Function(PostsRepository repo, String? cursor) load;
   final String emptyMessage;
+  final String emptyTitle;
+  final double topPadding;
 
   @override
   ConsumerState<PostFeedList> createState() => _PostFeedListState();
@@ -74,7 +84,7 @@ class _PostFeedListState extends ConsumerState<PostFeedList> with AutomaticKeepA
     } catch (e) {
       if (!mounted) return;
       setState(() => _posts[index] = before);
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ApiError.from(e).message)));
+      showToast(context, ApiError.from(e).message, tone: ToastTone.error);
     }
   }
 
@@ -83,57 +93,120 @@ class _PostFeedListState extends ConsumerState<PostFeedList> with AutomaticKeepA
     if (deleted == true && mounted) setState(() => _posts.removeWhere((p) => p.id == post.id));
   }
 
+  /// Membagi indeks post ke dua kolom: tiap post masuk ke kolom yang perkiraan tingginya lebih pendek
+  /// (masonry). Dihitung ulang tiap build supaya tetap benar saat halaman baru masuk atau post dihapus.
+  (List<int>, List<int>) _columns(double tileWidth) {
+    final left = <int>[], right = <int>[];
+    var hl = 0.0, hr = 0.0;
+    for (var i = 0; i < _posts.length; i++) {
+      final h = PostTile.estimateHeight(_posts[i], tileWidth) + Space.xl;
+      if (hl <= hr) {
+        left.add(i);
+        hl += h;
+      } else {
+        right.add(i);
+        hr += h;
+      }
+    }
+    return (left, right);
+  }
+
+  Widget _tile(int i) {
+    final post = _posts[i];
+    return PostTile(
+      key: ValueKey(post.id),
+      post: post,
+      heroTag: PostCard.heroTagFor(post.id),
+      onTap: () => _open(post),
+      onHeart: () => _toggleHeart(i),
+      onWhisper: () => openWhisper(context, type: WhisperOriginType.post, originId: post.id, excerpt: post.body),
+      onMore: post.isMine || post.author.publicId == null
+          ? null
+          : () => showSafetyMenu(context, ref, SafetyTarget.post, post.id,
+              onBlocked: () => setState(() => _posts.removeWhere((p) => p.author.publicId == post.author.publicId))),
+    );
+  }
+
+  /// Gutter layar dan jarak antarkolom (DESIGN.md: skala spasi).
+  static const _side = Space.md;
+  static const _between = Space.sm;
+
+  SliverList _column(List<int> indices) => SliverList.separated(
+        itemCount: indices.length,
+        itemBuilder: (context, k) => _tile(indices[k]),
+        separatorBuilder: (_, _) => const SizedBox(height: Space.xl),
+      );
+
   @override
   Widget build(BuildContext context) {
     super.build(context);
+    final bottom = navClearance(context);
     if (_posts.isEmpty) {
-      if (_loading) return const Center(child: CircularProgressIndicator());
+      if (_loading) {
+        return Shimmer(
+          child: ListView(
+            physics: const NeverScrollableScrollPhysics(),
+            padding: EdgeInsets.fromLTRB(_side, widget.topPadding, _side, bottom),
+            children: const [
+              Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Expanded(child: Column(children: [PostTileSkeleton(aspect: 0.8), SizedBox(height: Space.xl), PostTileSkeleton(aspect: 1)])),
+                SizedBox(width: _between),
+                Expanded(child: Column(children: [PostTileSkeleton(aspect: 1), SizedBox(height: Space.xl), PostTileSkeleton(aspect: 0.66)])),
+              ]),
+            ],
+          ),
+        );
+      }
       return RefreshIndicator(
         onRefresh: refresh,
-        child: ListView(children: [
-          const SizedBox(height: 120),
-          Icon(_error == null ? Icons.dynamic_feed : Icons.cloud_off, size: 48, color: Colors.grey),
-          const SizedBox(height: 12),
-          Center(child: Text(_error?.message ?? widget.emptyMessage, textAlign: TextAlign.center)),
+        child: ListView(padding: EdgeInsets.only(bottom: bottom), children: [
+          const SizedBox(height: Space.md),
+          _error == null
+              ? EmptyState(title: widget.emptyTitle, message: widget.emptyMessage)
+              : EmptyState(
+                  icon: Icons.cloud_off_rounded,
+                  title: 'Belum tersambung',
+                  message: _error!.message,
+                  action: SecondaryButton(label: 'Coba lagi', expand: false, onPressed: refresh),
+                ),
         ]),
       );
     }
-    return RefreshIndicator(
-      onRefresh: refresh,
-      child: NotificationListener<ScrollNotification>(
-        onNotification: (n) {
-          if (n.metrics.pixels > n.metrics.maxScrollExtent - 600) _loadMore();
-          return false;
-        },
-        child: ListView.builder(
-          padding: const EdgeInsets.only(bottom: 24),
-          itemCount: _posts.length + (_done ? 0 : 1),
-          itemBuilder: (context, i) {
-            if (i == _posts.length) {
-              return Padding(
-                padding: const EdgeInsets.all(16),
-                child: Center(
-                  child: _error != null
-                      ? TextButton(onPressed: _loadMore, child: const Text('Coba lagi'))
-                      : const CircularProgressIndicator(),
-                ),
-              );
-            }
-            final post = _posts[i];
-            return PostCard(
-              key: ValueKey(post.id),
-              post: post,
-              onTap: () => _open(post),
-              onHeart: () => _toggleHeart(i),
-              onWhisper: () => openWhisper(context, type: WhisperOriginType.post, originId: post.id, excerpt: post.body),
-              onMore: post.isMine || post.author.publicId == null
-                  ? null
-                  : () => showSafetyMenu(context, ref, SafetyTarget.post, post.id,
-                      onBlocked: () => setState(() => _posts.removeWhere((p) => p.author.publicId == post.author.publicId))),
-            );
+    return LayoutBuilder(builder: (context, box) {
+      final tileWidth = (box.maxWidth - _side * 2 - _between) / 2;
+      final (left, right) = _columns(tileWidth);
+      return RefreshIndicator(
+        onRefresh: refresh,
+        child: NotificationListener<ScrollNotification>(
+          onNotification: (n) {
+            if (n.metrics.pixels > n.metrics.maxScrollExtent - 600) _loadMore();
+            return false;
           },
+          child: CustomScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            slivers: [
+              SliverPadding(
+                padding: EdgeInsets.fromLTRB(_side, widget.topPadding, _side, 0),
+                sliver: SliverCrossAxisGroup(slivers: [
+                  SliverCrossAxisExpanded(flex: 1, sliver: _column(left)),
+                  const SliverConstrainedCrossAxis(maxExtent: _between, sliver: SliverToBoxAdapter(child: SizedBox.shrink())),
+                  SliverCrossAxisExpanded(flex: 1, sliver: _column(right)),
+                ]),
+              ),
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: EdgeInsets.fromLTRB(Space.md, Space.md, Space.md, bottom),
+                  child: _done
+                      ? const SizedBox.shrink()
+                      : _error != null
+                          ? Center(child: TextButton(onPressed: _loadMore, child: const Text('Coba lagi')))
+                          : const Loader(),
+                ),
+              ),
+            ],
+          ),
         ),
-      ),
-    );
+      );
+    });
   }
 }

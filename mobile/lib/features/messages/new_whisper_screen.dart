@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../app/ui/ui.dart';
 import '../../core/api/api_error.dart';
 import 'chat_engine.dart';
 import 'chat_providers.dart';
@@ -42,14 +43,18 @@ class _NewWhisperScreenState extends ConsumerState<NewWhisperScreen> {
       _error = null;
     });
     try {
-      final conv = await ref.read(chatRepositoryProvider).start(
+      final conv = await ref
+          .read(chatRepositoryProvider)
+          .start(
             originType: widget.originType,
             originId: widget.originId,
             firstMessage: text,
             clientMsgId: _clientMsgId,
           );
       ref.invalidate(conversationsProvider('inbox'));
-      if (mounted) context.pushReplacement('/pesan/${conv.id}');
+      // `go`, bukan `pushReplacement`: layar ini ada di navigator root, sedangkan chat ada di dalam tab Pesan
+      // (navigator lain). pushReplacement lintas navigator memicu assertion `keyReservation` di go_router.
+      if (mounted) context.go('/pesan/${conv.id}');
     } on ApiError catch (e) {
       setState(() => _error = e.code == 'NOT_FOUND' ? 'Post ini sudah tidak bisa dibisiki.' : e.message);
     } finally {
@@ -59,35 +64,83 @@ class _NewWhisperScreenState extends ConsumerState<NewWhisperScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.colors;
     return Scaffold(
-      appBar: AppBar(title: const Text('Bisik')),
+      appBar: const SenyapBar(),
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-            if (widget.excerpt != null)
-              Card(child: Padding(padding: const EdgeInsets.all(12), child: Text('"${widget.excerpt}"'))),
-            const SizedBox(height: 8),
-            const Text('Pesan pembukamu akan masuk ke tab Permintaan. Kamu bisa lanjut mengobrol setelah diterima. '
-                'Identitasmu tetap tersembunyi; yang terlihat hanya aliasmu.'),
-            const SizedBox(height: 12),
-            TextField(
-              key: const Key('opening'),
-              controller: _text,
-              minLines: 3,
-              maxLines: 6,
-              maxLength: 500,
-              autofocus: true,
-              decoration: InputDecoration(border: const OutlineInputBorder(), hintText: 'Tulis pesan pembuka…',
-                  errorText: _error),
+        top: false,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(
+              child: ListView(
+                keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+                padding: const EdgeInsets.fromLTRB(Space.gutter, Space.md, Space.gutter, Space.xl),
+                children: [
+                  Text('Mulai berbisik', style: context.text.headlineLarge),
+                  const SizedBox(height: Space.sm),
+                  Text(
+                    'Pesan pembukamu masuk ke tab Permintaan miliknya. Obrolan terbuka setelah dia menerima. '
+                    'Yang terlihat hanya aliasmu.',
+                    style: context.text.bodyMedium,
+                  ),
+                  if (widget.excerpt != null) ...[
+                    const SizedBox(height: Space.xl),
+                    Container(
+                      padding: const EdgeInsets.fromLTRB(Space.md, Space.sm, Space.md, Space.md),
+                      decoration: BoxDecoration(
+                        borderRadius: Radii.all(Radii.md),
+                        border: Border.all(color: c.line, width: 1),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            widget.originType == 'REPLY' ? 'Dari balasan' : 'Dari cerita',
+                            style: context.text.labelMedium?.copyWith(color: c.textTertiary),
+                          ),
+                          const SizedBox(height: Space.xxs),
+                          Text(
+                            '"${widget.excerpt}"',
+                            style: PostType.quote.copyWith(color: c.text),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: Space.xl),
+                  TextField(
+                    key: const Key('opening'),
+                    controller: _text,
+                    minLines: 4,
+                    maxLines: 8,
+                    maxLength: 500,
+                    autofocus: true,
+                    textCapitalization: TextCapitalization.sentences,
+                    style: context.text.bodyLarge,
+                    decoration: InputDecoration(
+                      labelText: 'Pesan pembuka',
+                      alignLabelWithHint: true,
+                      hintText: 'Sapa dengan hangat. Misalnya, bagian mana dari ceritanya yang menyentuhmu.',
+                      hintMaxLines: 3,
+                      errorText: _error,
+                      counterStyle: context.text.labelSmall?.copyWith(color: c.textTertiary),
+                    ),
+                  ),
+                ],
+              ),
             ),
-            const SizedBox(height: 12),
-            FilledButton(
-              key: const Key('send-whisper'),
-              onPressed: _busy ? null : _submit,
-              child: Text(_busy ? 'Mengirim…' : 'Kirim bisikan'),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(Space.gutter, Space.sm, Space.gutter, Space.md),
+              child: PrimaryButton(
+                key: const Key('send-whisper'),
+                tone: ButtonTone.accent,
+                busy: _busy,
+                label: 'Kirim bisikan',
+                onPressed: _submit,
+              ),
             ),
-          ]),
+          ],
         ),
       ),
     );

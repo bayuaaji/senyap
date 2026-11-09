@@ -9,26 +9,35 @@ import '../features/messages/chat_screen.dart';
 import '../features/messages/messages_screen.dart';
 import '../features/messages/new_whisper_screen.dart';
 import '../features/notifications/notifications_screen.dart';
-import '../features/onboarding/age_screen.dart';
+import '../features/onboarding/email_login_screen.dart';
+import '../features/onboarding/email_register_screen.dart';
+import '../features/onboarding/forgot_password_screen.dart';
 import '../features/onboarding/otp_screen.dart';
-import '../features/onboarding/permissions_screen.dart';
 import '../features/onboarding/phone_screen.dart';
+import '../features/onboarding/register_screen.dart';
 import '../features/onboarding/welcome_screen.dart';
 import '../features/posts/post_detail_screen.dart';
 import '../features/posts/post_models.dart';
-import '../features/profile/create_profile_screen.dart';
+import '../features/profile/complete_profile_screen.dart';
 import '../features/settings/settings_screen.dart';
 import 'shell.dart';
+import 'ui/ui.dart';
 
 /// Path tiap layar. Urutan tab sama dengan urutan di [AppShell].
 abstract final class AppRoutes {
   static const splash = '/';
+  /// Semua layar sebelum login ada di bawah `/mulai`.
   static const welcome = '/mulai';
-  static const age = '/mulai/usia';
-  static const phone = '/mulai/nomor';
+  static const register = '/mulai/daftar';
+  static const registerEmail = '/mulai/daftar/email';
+  static const registerPhone = '/mulai/daftar/nomor';
+  static const login = '/mulai/masuk';
+  static const loginPhone = '/mulai/masuk/nomor';
+  static const forgotPassword = '/mulai/masuk/lupa';
   static const otp = '/mulai/kode';
-  static const createProfile = '/profil-baru';
-  static const permissions = '/izin';
+
+  /// Login tetapi belum onboarding: gender → alias → avatar.
+  static const completeProfile = '/lengkapi-profil';
 
   static const feed = '/feed';
   static const compose = '/tulis';
@@ -51,11 +60,11 @@ String? sessionRedirect(SessionStatus status, String location) {
       location == AppRoutes.splash ? null : AppRoutes.splash,
     SessionStatus.signedOut => inOnboarding ? null : AppRoutes.welcome,
     SessionStatus.needsProfile =>
-      location == AppRoutes.createProfile ? null : AppRoutes.createProfile,
+      location == AppRoutes.completeProfile ? null : AppRoutes.completeProfile,
     SessionStatus.signedIn =>
       inOnboarding ||
               location == AppRoutes.splash ||
-              location == AppRoutes.createProfile
+              location == AppRoutes.completeProfile
           ? AppRoutes.feed
           : null,
   };
@@ -79,21 +88,32 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: AppRoutes.welcome,
         builder: (context, state) => const WelcomeScreen(),
         routes: [
-          GoRoute(path: 'usia', builder: (context, state) => const AgeScreen()),
           GoRoute(
-            path: 'nomor',
-            builder: (context, state) => const PhoneScreen(),
+            path: 'daftar',
+            builder: (context, state) => const RegisterScreen(),
+            routes: [
+              GoRoute(path: 'email', builder: (context, state) => const EmailRegisterScreen()),
+              GoRoute(path: 'nomor', builder: (context, state) => const PhoneScreen(register: true)),
+            ],
+          ),
+          GoRoute(
+            path: 'masuk',
+            builder: (context, state) => const EmailLoginScreen(),
+            routes: [
+              GoRoute(path: 'nomor', builder: (context, state) => const PhoneScreen(register: false)),
+              GoRoute(
+                path: 'lupa',
+                builder: (context, state) =>
+                    ForgotPasswordScreen(initialEmail: state.extra is String ? state.extra as String : null),
+              ),
+            ],
           ),
           GoRoute(path: 'kode', builder: (context, state) => const OtpScreen()),
         ],
       ),
       GoRoute(
-        path: AppRoutes.createProfile,
-        builder: (context, state) => const CreateProfileScreen(),
-      ),
-      GoRoute(
-        path: AppRoutes.permissions,
-        builder: (context, state) => const PermissionsScreen(),
+        path: AppRoutes.completeProfile,
+        builder: (context, state) => const CompleteProfileScreen(),
       ),
       GoRoute(
         path: AppRoutes.newWhisper,
@@ -111,7 +131,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         ),
       ),
       StatefulShellRoute.indexedStack(
-        builder: (context, state, shell) => AppShell(shell: shell),
+        builder: (context, state, shell) => AppShell(shell: shell, location: state.uri.path),
         branches: [
           _branch(AppRoutes.feed, const FeedScreen()),
           _branch(AppRoutes.compose, const ComposeScreen()),
@@ -151,6 +171,7 @@ class _Splash extends StatelessWidget {
   const _Splash();
 
   @override
-  Widget build(BuildContext context) =>
-      const Scaffold(body: Center(child: CircularProgressIndicator()));
+  Widget build(BuildContext context) => Scaffold(
+        body: Center(child: Text('Senyap', style: context.text.displaySmall)),
+      );
 }

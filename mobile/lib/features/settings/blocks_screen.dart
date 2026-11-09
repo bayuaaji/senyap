@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../app/ui/ui.dart';
 import '../../core/api/api_error.dart';
 import '../safety/safety_repository.dart';
 
@@ -36,46 +37,59 @@ class _BlocksScreenState extends ConsumerState<BlocksScreen> {
   }
 
   Future<void> _unblock(BlockedAccount b) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Buka blokir ${b.display}?'),
-        content: const Text('Kalian bisa saling melihat konten lagi. Percakapan Bisik yang sudah ditutup tidak dibuka kembali.'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Batal')),
-          FilledButton(key: const Key('confirm-unblock'), onPressed: () => Navigator.pop(context, true), child: const Text('Buka blokir')),
-        ],
-      ),
+    final ok = await showConfirm(
+      context,
+      icon: Icons.lock_open_rounded,
+      title: 'Buka blokir ${b.display}?',
+      message: 'Kalian bisa saling melihat konten lagi. Percakapan Bisik yang sudah ditutup tidak dibuka kembali.',
+      confirmLabel: 'Buka blokir',
+      confirmKey: const Key('confirm-unblock'),
     );
-    if (ok != true || !mounted) return;
-    final messenger = ScaffoldMessenger.of(context);
+    if (!ok || !mounted) return;
     try {
       await ref.read(safetyRepositoryProvider).unblock(b.id);
       await _load();
     } on ApiError catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text(e.message)));
+      if (mounted) showToast(context, e.message, tone: ToastTone.error);
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Akun yang diblokir')),
-      body: switch ((_items, _error)) {
-        (_, final String error) => Center(child: Text(error)),
-        (null, _) => const Center(child: CircularProgressIndicator()),
-        (final List<BlockedAccount> items, _) when items.isEmpty =>
-          const Center(child: Text('Belum ada akun yang kamu blokir.')),
-        (final List<BlockedAccount> items, _) => ListView(children: [
-            for (final b in items)
-              ListTile(
-                key: Key('blocked-${b.id}'),
-                leading: const Icon(Icons.block),
-                title: Text(b.display),
-                trailing: TextButton(onPressed: () => _unblock(b), child: const Text('Buka blokir')),
+      appBar: const SenyapBar(),
+      body: ListView(padding: const EdgeInsets.only(bottom: Space.x4), children: [
+        const ScreenTitle('Akun yang diblokir',
+            subtitle: 'Mereka tidak bisa melihat kontenmu atau berbisik kepadamu. Mereka tidak diberi tahu.',
+            padding: EdgeInsets.fromLTRB(Space.gutter, Space.md, Space.gutter, Space.xl)),
+        switch ((_items, _error)) {
+          (_, final String error) => EmptyState(
+              icon: Icons.cloud_off_rounded,
+              title: 'Belum tersambung',
+              message: error,
+              action: SecondaryButton(label: 'Coba lagi', expand: false, onPressed: _load),
+            ),
+          (null, _) => const SizedBox(height: 240, child: ListSkeleton(count: 3)),
+          (final List<BlockedAccount> items, _) when items.isEmpty => const Padding(
+              padding: EdgeInsets.only(top: Space.xxl),
+              child: EmptyState(
+                title: 'Tidak ada yang diblokir',
+                message: 'Belum ada akun yang kamu blokir.',
               ),
-          ]),
-      },
+            ),
+          (final List<BlockedAccount> items, _) => GroupCard(children: [
+              for (final b in items)
+                Padding(
+                  key: Key('blocked-${b.id}'),
+                  padding: const EdgeInsets.fromLTRB(Space.gutter, Space.xs, Space.sm, Space.xs),
+                  child: Row(children: [
+                    Expanded(child: Text(b.display, style: context.text.titleMedium)),
+                    TextButton(onPressed: () => _unblock(b), child: const Text('Buka blokir')),
+                  ]),
+                ),
+            ]),
+        },
+      ]),
     );
   }
 }

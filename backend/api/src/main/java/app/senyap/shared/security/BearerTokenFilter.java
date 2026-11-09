@@ -24,7 +24,8 @@ public class BearerTokenFilter extends OncePerRequestFilter {
 
     public static final String ATTRIBUTE = AuthenticatedUser.class.getName();
 
-    static final Set<String> PUBLIC_PATHS = Set.of("/v1/auth/otp", "/v1/auth/verify", "/v1/auth/refresh");
+    static final Set<String> PUBLIC_PATHS = Set.of("/v1/auth/otp", "/v1/auth/verify", "/v1/auth/refresh",
+            "/v1/auth/email/register", "/v1/auth/email/login", "/v1/auth/email/forgot", "/v1/auth/email/reset");
 
     private final AccessTokenVerifier verifier;
     private final PrincipalResolver principals;

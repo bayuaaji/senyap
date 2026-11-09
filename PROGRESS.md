@@ -13,6 +13,7 @@ Diperbarui di akhir setiap sesi. Sesi baru mulai dari sini.
 | 3 Post, feed, balasan | ✅ Selesai | 9 Nov 2026, digabung ke `main`; tombol Bisik tersambung |
 | 4 Keselamatan | ✅ Selesai | 9 Nov 2026, digabung ke `main`; penyedia moderasi, hotline, penanggung jawab P0, review hukum menunggu user |
 | 5 Siap produksi | 🟡 Kode selesai | 9 Nov 2026, digabung ke `main` (belum di-push); load test penuh, kepatuhan, beta menunggu staging/user |
+| Desain (redesign mobile) | 🟡 Selesai, belum di-commit | 9 Nov 2026, menunggu review user |
 
 Checklist rinci tiap fase ada di `docs/03-build-guide.md` §4. Centang di sana saat item selesai.
 
@@ -25,19 +26,39 @@ Checklist rinci tiap fase ada di `docs/03-build-guide.md` §4. Centang di sana s
 - Nomor hotline Indonesia untuk kartu bantuan (config masih `BELUM-DIVERIFIKASI`; api gagal start di produksi sampai diisi + `verified: true`).
 - Penanggung jawab P0 + jadwal jaga (`docs/05-prosedur-eskalasi-p0.md`, bagian `[ISI]`). Sumber daftar hash gambar resmi.
 - Kepatuhan hukum (PSE, UU PDP) perlu dicek dengan konsultan sebelum rilis.
+- Penyedia email transaksional (kode reset kata sandi) belum dipilih. Sampai ada implementasi `EmailSender` untuk produksi, api/worker sengaja gagal start di luar profil local/test.
 - Penyedia OTP (SMS/WhatsApp) belum dipilih. Sampai ada implementasi `OtpSender` untuk produksi, api sengaja gagal start di luar profil local/test. API moderasi teks/gambar juga belum dipilih (sementara `HeuristicClassifier`).
 
 ## Catatan serah terima
 
-Tulis entri baru di paling atas dengan format ini:
+### 2026-11-09 — Fase Desain (redesign visual mobile)
+- Selesai: redesign total `mobile/` dengan arah "Senyap — malam yang tenang". `flutter analyze` bersih, `flutter test` 67 lulus, QA visual di simulator iPhone 17 Pro (screenshot di `mobile/design-review/`, di-.gitignore).
+  - Design system `lib/app/theme/`: `tokens.dart` (`SenyapColors` gelap+terang sebagai ThemeExtension, `Space`, `Radii`, `Motion`, `OnImage`; akses `context.colors`), `typography.dart` (Plus Jakarta Sans UI, Fraunces untuk isi post; `PostType` ukuran adaptif), `theme.dart` (`buildSenyapTheme`: semua component theme). Font OFL dibundel di `assets/fonts/` (tanpa unduhan runtime, test offline).
+  - Widget dasar `lib/app/ui/` (`ui.dart` barrel): `PrimaryButton`/`SecondaryButton`/`RoundIconButton`/`BackCircle`/`Pressable`, `SenyapBar`/`ScreenTitle`/`SectionLabel`/`GroupCard`/`GroupTile`, `showToast`/`showConfirm`/`SenyapDialog`/`showSenyapSheet`/`SheetAction`, `EmptyState`/`LanternGlow`/`LanternOrb`/`FadeSlideIn`/`Shimmer`/`SkeletonBox`/`ListSkeleton`/`Loader`, `PillTabs`/`ChoicePills`.
+  - Shell: nav bawah melayang + blur (`app/shell.dart`), disembunyikan di `/pesan/:id`; titik lilac bila ada pesan/permintaan. Konten tab memakai `navClearance(context)`.
+  - Semua layar diganti: sambutan (langit + lentera), daftar/masuk/lupa sandi/nomor HP/OTP (kotak digit di atas `TextField` tersembunyi), lengkapi profil (progres segmen + pratinjau identitas), feed (wordmark, tab segmen, kartu Hero ke detail, skeleton), detail + balasan, Tulis, Pesan (segmen + lencana), chat (pemisah hari, jam `HH.mm`, gelembung lilac, kartu asal cerita, kolom tulis melayang), mulai Bisik, viewer, notifikasi, pengaturan, profil, blokir, legal, sheet laporkan/blokir, kartu bantuan, dialog lokasi.
+- Keputusan: tema dipaksa gelap (`ThemeMode.dark`), tema terang sudah setara tapi belum diaktifkan. Label input tidak melayang (`FloatingLabelBehavior.never`). Halaman dari Pengaturan di-push ke navigator root (tanpa nav bawah). Animasi berulang (shimmer) mati di test (`FLUTTER_TEST`).
+- Test diperbarui: key nav `nav-feed|nav-compose|nav-messages|nav-notifications|nav-settings` + `app-nav`; judul detail "Cerita"; empty inbox "Belum ada bisikan"; geometri tag kategori (kini di tengah di atas teks); beberapa `ensureVisible` karena nav melayang.
+- Catatan QA: simulator ditinggal di layar Masuk (akun uji `desain.uji1@contoh.id` dibuat di backend lokal). Belum di-commit (menunggu persetujuan user).
+- Langkah berikutnya: review user; opsional toggle tema terang di Pengaturan.
 
-```text
 ### YYYY-MM-DD — Fase N
 - Selesai: …
 - Sedang dikerjakan / setengah jadi: … (file, apa yang kurang)
 - Masalah / keputusan baru: …
 - Langkah berikutnya: …
 ```
+
+### 2026-11-09 — Revisi setelah uji simulator
+- Selesai (backend, belum di-commit; mobile dikerjakan agen lain paralel):
+  - **Gender + avatar** (identity `V5`): `users.gender` (`male`/`female`/`unspecified`, default), `users.avatar` (ID dari `AvatarCatalog`, 26 emoji hewan/alam, bukan foto). `PUT /v1/me/profile {gender?, avatar?}` (absen = tidak berubah, `avatar: null` = hapus, boleh sebelum onboarding, event `user.profile_changed`). `PublicIdentity` + semua author/peer (post, balasan, Bisik, daftar blokir) membawa `gender` + `avatar` (emoji/null).
+  - **Alias per gender**: `AliasCatalog.words(gender)` — `male` 36×20, `female` 36×20, `unspecified` = hewan×warna lama. Suggest `{first?, second?}` (alias `animal`/`color`) dari gender user saat ini; `GET /v1/aliases/catalog?gender=` → `{gender, first, second, avatars}`. Alias tersimpan tidak berubah.
+  - **Email + kata sandi** (auth `V3`): `email_credentials` (email plaintext ternormalisasi — trade-off dicatat di requirements NFR-16), `password_reset_codes`, `POST /v1/auth/email/{register,login,forgot,reset}` (publik di `BearerTokenFilter`), kode error baru `INVALID_EMAIL`, `WEAK_PASSWORD`, `EMAIL_TAKEN`, `INVALID_CREDENTIALS`. Identity: `phone_hmac` nullable, `IdentityApi.createAccount()` + `signInAccount(userId)` (memulihkan akun DELETED). Consumer `user.purged` di auth menghapus kredensial email. `EmailSender` + mock `LoggingEmailSender` (local/test); produksi tanpa implementasi → gagal start.
+  - Test: `ProfileGenderAvatarIT`, `EmailAuthIT`, `AliasCatalogTest` (per gender, tanpa irisan, kombinasi terlarang), `AvatarCatalogTest`, `EmailAuthServiceTest`; penjaga anonimitas kini juga menolak field `email`/`password_hash`.
+- Keputusan: register → 201 (login 200), bentuk body sama dengan verify; kode reset salah memakai `OTP_INVALID`; login gagal apa pun = `INVALID_CREDENTIALS` + BCrypt atas hash dummy; email ≠ nomor HP (akun terpisah, tidak ditautkan); katalog alias tetap wajib Bearer.
+- Catatan: CLAUDE.md masih menyebut format alias `{hewan} {warna}` dan path publik `/v1/auth/{otp,verify,refresh}` — perlu diperbarui (di luar izin sesi ini).
+- Verifikasi: `./mvnw -B verify` penuh LULUS (151 test: api 69 unit + 76 IT, realtime, contracts).
+- Langkah berikutnya: pilih penyedia email transaksional + implementasi `EmailSender`; uji ulang di simulator bersama perubahan mobile.
 
 ### 2026-11-09 — Fase 5
 - Selesai (branch `fase-5-produksi`, dari commit Fase 4 `e89e336`):
@@ -181,3 +202,8 @@ Tulis entri baru di paling atas dengan format ini:
 - Selesai: transkrip Instagram System Design diubah jadi `docs/01–03`. Arah produk diganti ke app anonim dengan DM sebagai inti.
 - Keputusan baru (sudah dicatat di `CLAUDE.md`): alias satu per akun, tampil di post/balasan/DM; enkripsi hanya TLS; format waktu relatif.
 - Langkah berikutnya: Fase 0 (docker compose, skeleton `api` + `realtime`, migrasi V1, test penjaga anonimitas, skeleton Flutter).
+
+### 2026-11-09 — Desain ulang v2 ("surat tanpa nama")
+- Selesai: `mobile/DESIGN.md` (arah, palet, tipografi, spasi, radius, motion, komponen, copy). Token baru di `lib/app/theme/` (tinta kehijauan + kertas, satu aksen jambu, Fraunces untuk suara manusia, Jakarta untuk UI), `ThemeMode.system`. UI kit: `TextTabs`/`ChoiceChips` (ganti `PillTabs`), nav bawah menempel, daftar datar, empty state tanpa glow. Semua layar diterapkan. Screenshot di `mobile/design-review/v2/` (terang + gelap).
+- Lanjutan (10 Nov): feed jadi dua kolom masonry (`PostTile` + `SliverCrossAxisGroup`, tanpa paket baru; paging cursor + tarik-muat-ulang tetap), nav bawah docked penuh sampai safe area. Dua test yang gagal ternyata karena elemen di luar layar setelah layout lebih lega; test disesuaikan (`scrollUntilVisible`/`ensureVisible`). `flutter analyze` bersih, `flutter test` 67/67 lulus.
+- Belum: layar launch native iOS masih putih di mode gelap; data uji lokal dari skrip seed (akun 081277700001–3) masih ada di backend lokal.

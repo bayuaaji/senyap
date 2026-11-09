@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../app/shell.dart' show navClearance;
+import '../../app/ui/ui.dart';
 import '../../core/api/api_error.dart';
 import '../posts/blurhash.dart';
+import '../posts/location_prompt.dart';
 import '../posts/location_service.dart';
 import '../posts/post_card.dart';
 import '../posts/post_models.dart';
@@ -102,10 +106,9 @@ class _ComposeScreenState extends ConsumerState<ComposeScreen> {
     try {
       String? cell;
       if (_useLocation) {
-        cell = await ref.read(locationServiceProvider).currentCell();
-        if (cell == null) {
-          _toast('Lokasi tidak tersedia. Post dikirim tanpa lokasi.');
-        }
+        final location = await _resolveLocation();
+        if (location == null) return; // dibatalkan atau user ke Pengaturan dulu
+        cell = location.cell;
       }
       final post = await _repo.create(
         body: _text.text.trim(),
@@ -125,151 +128,205 @@ class _ComposeScreenState extends ConsumerState<ComposeScreen> {
     }
   }
 
+  /// Lokasi untuk post. `null` = jangan kirim sekarang; [LocationResult] tanpa cell = kirim tanpa lokasi
+  /// (hanya bila user memilihnya sendiri, tidak pernah diam-diam).
+  Future<LocationResult?> _resolveLocation() async {
+    final service = ref.read(locationServiceProvider);
+    while (true) {
+      final result = await service.currentCell();
+      if (result.isOk || !mounted) return result;
+      final choice = await showLocationProblem(context, result.status, withoutLabel: 'Kirim tanpa lokasi');
+      switch (choice) {
+        case LocationChoice.retry:
+          continue;
+        case LocationChoice.openSettings:
+          await openSettingsFor(service, result.status);
+          return null;
+        case LocationChoice.continueWithout:
+          return const LocationResult(LocationStatus.failed);
+        case LocationChoice.cancel:
+          return null;
+      }
+    }
+  }
+
   void _toast(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    showToast(context, message, tone: ToastTone.error);
   }
 
   @override
   Widget build(BuildContext context) {
+    final c = context.colors;
     final length = _text.text.trim().characters.length;
     final bg = _background;
+    final over = length > maxLength;
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Tulis'),
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: FilledButton(
-              key: const Key('compose-submit'),
-              onPressed: _canPost ? _post : null,
-              child: Text(_posting ? 'Mengirim…' : 'Kirim'),
+      body: SafeArea(
+        bottom: false,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            ScreenTitle(
+              'Tulis',
+              subtitle: 'Yang membaca hanya melihat aliasmu.',
+              trailing: FilledButton(
+                key: const Key('compose-submit'),
+                style: FilledButton.styleFrom(minimumSize: const Size(84, 44)),
+                onPressed: _canPost ? _post : null,
+                child: Text(_posting ? 'Mengirim…' : 'Kirim'),
+              ),
             ),
-          ),
-        ],
-      ),
-      body: ListView(key: const Key('compose-list'), padding: const EdgeInsets.only(bottom: 24), children: [
-        // Pratinjau: teks di atas latar, persis seperti di feed.
-        Padding(
-          padding: const EdgeInsets.all(12),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: AspectRatio(
-              aspectRatio: 4 / 5,
-              child: Stack(fit: StackFit.expand, children: [
-                PostBackground(background: bg == null ? null : BackgroundImage(url: bg.url, blurhash: bg.blurhash)),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 40),
-                  child: Center(
-                    child: TextField(
-                      key: const Key('compose-text'),
-                      controller: _text,
-                      maxLines: null,
-                      textAlign: TextAlign.center,
-                      cursorColor: Colors.white,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 22,
-                        fontWeight: FontWeight.w600,
-                        shadows: [Shadow(blurRadius: 8, color: Colors.black87)],
-                      ),
-                      decoration: const InputDecoration(
-                        border: InputBorder.none,
-                        hintText: 'Ceritakan sesuatu tanpa nama…',
-                        hintStyle: TextStyle(color: Colors.white70),
+            Expanded(
+              child: ListView(
+                key: const Key('compose-list'),
+                padding: EdgeInsets.only(bottom: navClearance(context)),
+                keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+                children: [
+                  // Pratinjau: teks di atas latar, persis seperti di feed.
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: Space.md),
+                    child: ClipRRect(
+                      borderRadius: Radii.all(Radii.lg),
+                      child: AspectRatio(
+                        aspectRatio: 4 / 5,
+                        child: Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            AnimatedSwitcher(
+                              duration: Motion.slow,
+                              child: PostBackground(
+                                key: ValueKey(bg?.id),
+                                background: bg == null ? null : BackgroundImage(url: bg.url, blurhash: bg.blurhash),
+                              ),
+                            ),
+                            const PostScrim(),
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(Space.xl, Space.x3, Space.xl, Space.x3),
+                              child: Center(
+                                child: Column(mainAxisSize: MainAxisSize.min, children: [
+                                PostKicker(label: postCategories[_category] ?? _category),
+                                const SizedBox(height: Space.md),
+                                Flexible(child: TextField(
+                                  key: const Key('compose-text'),
+                                  controller: _text,
+                                  maxLines: null,
+                                  textAlign: TextAlign.center,
+                                  textCapitalization: TextCapitalization.sentences,
+                                  cursorColor: OnImage.text,
+                                  style: PostType.body(length == 0 ? 1 : length),
+                                  decoration: InputDecoration(
+                                    filled: false,
+                                    border: InputBorder.none,
+                                    enabledBorder: InputBorder.none,
+                                    focusedBorder: InputBorder.none,
+                                    hintText: 'Tulis yang sedang kamu pikirkan.',
+                                    hintMaxLines: 3,
+                                    hintStyle: PostType.body(40, color: OnImage.faint),
+                                  ),
+                                )),
+                                ]),
+                              ),
+                            ),
+                            Positioned(
+                              right: Space.md,
+                              bottom: Space.sm,
+                              child: Text(
+                                over ? '$length/$maxLength, terlalu panjang' : '$length/$maxLength',
+                                style: context.text.labelSmall?.copyWith(
+                                  color: OnImage.text,
+                                  shadows: OnImage.shadow,
+                                  decoration: over ? TextDecoration.underline : null,
+                                  decorationColor: OnImage.text,
+                                ),
+                              ),
+                            ),
+                            if (_uploading)
+                              const ColoredBox(
+                                color: Color(0x80000000),
+                                child: Loader(color: OnImage.text),
+                              ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
-                ),
-                if (_uploading) const ColoredBox(color: Color(0x66000000), child: Center(child: CircularProgressIndicator())),
-              ]),
-            ),
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Align(
-            alignment: Alignment.centerRight,
-            child: Text('$length/$maxLength',
-                style: TextStyle(color: length > maxLength ? Theme.of(context).colorScheme.error : null)),
-          ),
-        ),
-        const _SectionTitle('Kategori'),
-        SizedBox(
-          height: 48,
-          child: ListView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            children: [
-              for (final e in postCategories.entries)
-                Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: ChoiceChip(
-                    label: Text(e.value),
-                    selected: e.key == _category,
-                    onSelected: (_) {
-                      setState(() => _category = e.key);
+                  const SectionLabel('Kategori'),
+                  ChoiceChips<String>(
+                    options: postCategories,
+                    selected: _category,
+                    onSelected: (k) {
+                      setState(() => _category = k);
                       _loadGallery();
                     },
                   ),
-                ),
-            ],
-          ),
-        ),
-        const _SectionTitle('Latar'),
-        SizedBox(
-          height: 96,
-          child: _galleryError != null
-              ? Center(child: TextButton(onPressed: _loadGallery, child: Text('$_galleryError Coba lagi')))
-              : ListView(
-                  scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  children: [
-                    _Thumb(
-                      key: const Key('compose-upload'),
-                      selected: false,
-                      onTap: _uploading ? null : _upload,
-                      child: const Center(child: Icon(Icons.add_photo_alternate_outlined)),
+                  const SectionLabel('Latar'),
+                  SizedBox(
+                    height: 100,
+                    child: _galleryError != null
+                        ? Center(
+                            child: TextButton(onPressed: _loadGallery, child: Text('$_galleryError Coba lagi')),
+                          )
+                        : ListView(
+                            scrollDirection: Axis.horizontal,
+                            padding: Space.screen,
+                            children: [
+                              _Thumb(
+                                key: const Key('compose-upload'),
+                                selected: false,
+                                onTap: _uploading ? null : _upload,
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(Icons.add_photo_alternate_outlined, color: c.text),
+                                    const SizedBox(height: 6),
+                                    Text('Fotomu', style: context.text.labelSmall?.copyWith(color: c.textSecondary)),
+                                  ],
+                                ),
+                              ),
+                              if (bg != null && _isUploaded(bg))
+                                _Thumb(selected: true, onTap: () {}, child: _ThumbImage(bg)),
+                              if (_loadingGallery) const SizedBox(width: 80, child: Loader()),
+                              for (final item in _gallery)
+                                _Thumb(
+                                  selected: bg?.id == item.id,
+                                  onTap: () {
+                                    HapticFeedback.selectionClick();
+                                    setState(() => _background = item);
+                                  },
+                                  child: _ThumbImage(item),
+                                ),
+                            ],
+                          ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(Space.gutter, Space.sm, Space.gutter, 0),
+                    child: Text(
+                      'Foto yang kamu unggah dikaburkan sedikit dan digelapkan supaya tulisan terbaca dan wajah sulit dikenali.',
+                      style: context.text.bodySmall?.copyWith(color: c.textTertiary, fontWeight: FontWeight.w400),
                     ),
-                    if (bg != null && _isUploaded(bg))
-                      _Thumb(selected: true, onTap: () {}, child: _ThumbImage(bg)),
-                    if (_loadingGallery) const Center(child: Padding(padding: EdgeInsets.all(16), child: CircularProgressIndicator())),
-                    for (final item in _gallery)
-                      _Thumb(
-                        selected: bg?.id == item.id,
-                        onTap: () => setState(() => _background = item),
-                        child: _ThumbImage(item),
+                  ),
+                  const SizedBox(height: Space.lg),
+                  Divider(color: c.line),
+                  GroupCard(
+                    children: [
+                      GroupTile(
+                        key: const Key('compose-location'),
+                        title: 'Tampilkan kota',
+                        subtitle: 'Hanya kota dan area ±5 km yang disimpan, bukan lokasi tepatmu.',
+                        onTap: () => setState(() => _useLocation = !_useLocation),
+                        trailing: Switch(value: _useLocation, onChanged: (v) => setState(() => _useLocation = v)),
                       ),
-                  ],
-                ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
-        const Padding(
-          padding: EdgeInsets.fromLTRB(16, 4, 16, 0),
-          child: Text('Foto yang kamu unggah dikaburkan sedikit dan digelapkan supaya tulisan terbaca dan wajah sulit dikenali.',
-              style: TextStyle(fontSize: 12)),
-        ),
-        SwitchListTile(
-          key: const Key('compose-location'),
-          value: _useLocation,
-          onChanged: (v) => setState(() => _useLocation = v),
-          title: const Text('Tampilkan kota'),
-          subtitle: const Text('Hanya kota dan area ±5 km yang disimpan, bukan lokasi tepatmu.'),
-        ),
-      ]),
+      ),
     );
   }
-}
-
-class _SectionTitle extends StatelessWidget {
-  const _SectionTitle(this.text);
-
-  final String text;
-
-  @override
-  Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-        child: Text(text, style: Theme.of(context).textTheme.titleSmall),
-      );
 }
 
 class _Thumb extends StatelessWidget {
@@ -281,24 +338,24 @@ class _Thumb extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.colors;
     return Padding(
-      padding: const EdgeInsets.only(right: 8),
-      child: InkWell(
+      padding: const EdgeInsets.only(right: Space.xs),
+      child: Pressable(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(8),
-        child: Container(
-          width: 72,
-          height: 90,
-          clipBehavior: Clip.antiAlias,
+        scale: 0.94,
+        child: AnimatedContainer(
+          duration: Motion.base,
+          curve: Motion.curve,
+          width: 78,
+          height: 100,
+          padding: EdgeInsets.all(selected ? 3 : 0),
           decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surfaceContainerHighest,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(
-              width: 3,
-              color: selected ? Theme.of(context).colorScheme.primary : Colors.transparent,
-            ),
+            color: c.raised,
+            borderRadius: Radii.all(Radii.md),
+            border: Border.all(width: 2, color: selected ? c.text : Colors.transparent),
           ),
-          child: child,
+          child: ClipRRect(borderRadius: Radii.all(selected ? Radii.md - 3 : Radii.md), child: child),
         ),
       ),
     );
@@ -311,8 +368,11 @@ class _ThumbImage extends StatelessWidget {
   final GalleryItem item;
 
   @override
-  Widget build(BuildContext context) => Stack(fit: StackFit.expand, children: [
-        BlurHashBox(hash: item.blurhash),
-        Image.network(item.url, fit: BoxFit.cover, errorBuilder: (_, _, _) => const SizedBox.shrink()),
-      ]);
+  Widget build(BuildContext context) => Stack(
+    fit: StackFit.expand,
+    children: [
+      BlurHashBox(hash: item.blurhash),
+      Image.network(item.url, fit: BoxFit.cover, errorBuilder: (_, _, _) => const SizedBox.shrink()),
+    ],
+  );
 }

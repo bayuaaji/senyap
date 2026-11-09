@@ -1,5 +1,6 @@
 package app.senyap.identity.internal;
 
+import app.senyap.identity.Gender;
 import app.senyap.identity.internal.AliasCatalog.AliasColor;
 import app.senyap.shared.db.ModuleDatabase;
 import app.senyap.shared.error.ApiException;
@@ -9,16 +10,16 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 
 /**
- * Mengacak alias {@code {hewan} {warna} #tag} yang belum dipakai (unik global pada
+ * Mengacak alias {@code {kata1} {kata2} #tag} dari katalog gender user yang belum dipakai (unik global pada
  * {@code (alias_name, alias_tag)}). Kalau bentrok, tag diacak ulang (functional spec §1.1).
  * Pemeriksaan di sini hanya optimis; constraint {@code users_alias_uq} tetap penentu akhir.
  */
 @Component
 class AliasGenerator {
 
-    record Alias(String animal, AliasColor color, String tag) {
+    record Alias(Gender gender, String first, AliasColor second, String tag) {
         String name() {
-            return AliasCatalog.aliasName(animal, color);
+            return AliasCatalog.aliasName(first, second);
         }
     }
 
@@ -31,20 +32,24 @@ class AliasGenerator {
         this.db = db;
     }
 
-    /** @param animal null = acak; @param colorName null = acak. Nilai harus ada di {@link AliasCatalog}. */
-    Alias generate(String animal, String colorName) {
-        if (animal != null && !AliasCatalog.isAnimal(animal)) {
-            throw new ApiException(ErrorCode.VALIDATION_FAILED, "Hewan tidak ada di daftar.");
+    /**
+     * @param first  null = acak; harus ada di katalog {@code gender}
+     * @param second null = acak; harus ada di katalog {@code gender}
+     */
+    Alias generate(Gender gender, String first, String second) {
+        var words = AliasCatalog.words(gender);
+        if (first != null && !words.isFirst(first)) {
+            throw new ApiException(ErrorCode.VALIDATION_FAILED, "Kata pertama tidak ada di daftar.");
         }
         AliasColor color = null;
-        if (colorName != null) {
-            color = AliasCatalog.color(colorName)
-                    .orElseThrow(() -> new ApiException(ErrorCode.VALIDATION_FAILED, "Warna tidak ada di daftar."));
+        if (second != null) {
+            color = words.second(second)
+                    .orElseThrow(() -> new ApiException(ErrorCode.VALIDATION_FAILED, "Kata kedua tidak ada di daftar."));
         }
         for (int i = 0; i < MAX_TAG_TRIES; i++) {
-            var a = animal != null ? animal : AliasCatalog.ANIMALS.get(random.nextInt(AliasCatalog.ANIMALS.size()));
-            var c = color != null ? color : AliasCatalog.COLORS.get(random.nextInt(AliasCatalog.COLORS.size()));
-            var candidate = new Alias(a, c, randomTag());
+            var a = first != null ? first : words.first().get(random.nextInt(words.first().size()));
+            var c = color != null ? color : words.second().get(random.nextInt(words.second().size()));
+            var candidate = new Alias(words.gender(), a, c, randomTag());
             if (isFree(candidate.name(), candidate.tag())) {
                 return candidate;
             }

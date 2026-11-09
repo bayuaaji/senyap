@@ -43,7 +43,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(safety.blockCalls, ['POST:101']);
 
-    await tester.tap(find.byIcon(Icons.settings_outlined));
+    await tester.tap(find.byKey(const Key('nav-settings')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('settings-blocks')));
     await tester.pumpAndSettle();
@@ -59,7 +59,7 @@ void main() {
   testWidgets('dokumen legal bisa dibuka dari Pengaturan', (tester) async {
     usePhoneSize(tester);
     await pumpApp(tester, tokens: InMemoryTokenStore(testTokens));
-    await tester.tap(find.byIcon(Icons.settings_outlined));
+    await tester.tap(find.byKey(const Key('nav-settings')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('legal-guidelines')));
     await tester.pumpAndSettle();

@@ -1,6 +1,10 @@
 /// Model post, balasan, dan galeri latar (functional spec §4, FS-02, FS-04). Author hanya `public_id` + alias.
 library;
 
+import '../profile/profile_models.dart';
+
+export '../profile/profile_models.dart' show Gender;
+
 const postCategories = <String, String>{
   'curhat': 'Curhat',
   'cinta': 'Cinta',
@@ -13,13 +17,25 @@ const postCategories = <String, String>{
 };
 
 class Author {
-  const Author({this.publicId, required this.name, this.tag, this.color, this.isPostAuthor = false});
+  const Author({
+    this.publicId,
+    required this.name,
+    this.tag,
+    this.color,
+    this.isPostAuthor = false,
+    this.gender = Gender.unspecified,
+    this.avatar,
+  });
 
   /// `null` bila akun sudah dihapus permanen ("[dihapus]").
   final String? publicId;
   final String name;
   final String? tag;
   final String? color;
+  final Gender gender;
+
+  /// Emoji avatar; `null` = inisial alias.
+  final String? avatar;
 
   /// Lencana Penulis (hanya di balasan).
   final bool isPostAuthor;
@@ -30,6 +46,8 @@ class Author {
         tag: j['tag'] as String?,
         color: j['color'] as String?,
         isPostAuthor: j['is_post_author'] as bool? ?? false,
+        gender: Gender.parse(j['gender']),
+        avatar: j['avatar'] as String?,
       );
 
   String get display => tag == null ? name : '$name #$tag';

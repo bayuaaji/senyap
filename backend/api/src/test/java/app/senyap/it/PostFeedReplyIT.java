@@ -191,11 +191,11 @@ class PostFeedReplyIT extends IntegrationTest {
     }
 
     @Test
-    void kuotaPostAkunBaru() {
+    void kuotaPost40PerHari() {
         User a = login();
         String bg = builtinBackground("tanya");
         String body = "{\"body\":\"tanya\",\"category\":\"tanya\",\"bg_media_id\":\"" + bg + "\"}";
-        for (int i = 0; i < 3; i++) {
+        for (int i = 0; i < 40; i++) {
             assertThat(send("POST", "/v1/posts", body, a.token()).statusCode()).isEqualTo(201);
         }
         var quota = send("POST", "/v1/posts", body, a.token());

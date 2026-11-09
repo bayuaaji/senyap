@@ -18,7 +18,7 @@ public final class AnonymityGuard {
     /** Dinormalisasi: huruf kecil tanpa underscore. */
     static final Set<String> FORBIDDEN_KEYS = Set.of(
             "userid", "authorid", "senderid", "ownerid", "initiatorid", "recipientid", "reporterid",
-            "blockerid", "blockedid", "phone", "phonenumber", "phonehmac");
+            "blockerid", "blockedid", "phone", "phonenumber", "phonehmac", "email", "passwordhash");
 
     private static final JsonMapper JSON = JsonMapper.builder().build();
 

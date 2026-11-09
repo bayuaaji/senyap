@@ -27,7 +27,7 @@ Dokumen:
 
 ## Keputusan yang sudah final (jangan diubah tanpa persetujuan user)
 
-- **Alias**: satu per akun, diacak saat profil dibuat, melekat sampai diubah di pengaturan (maks 1× per 7 hari). Format `{hewan} {warna} #tag4digit`, unik global, dipilih dari daftar (bukan teks bebas). Ditampilkan di post, balasan, dan DM. Pembuat post di balasannya diberi lencana Penulis.
+- **Alias**: satu per akun, diacak saat profil dibuat, melekat sampai diubah di pengaturan (maks 1× per 7 hari). Format `{kata1} {kata2} #tag4digit` dari katalog sesuai gender (laki-laki mis. "Pangeran Senja", perempuan mis. "Putri Rembulan", tidak disebut = hewan × warna), unik global, dipilih dari daftar (bukan teks bebas). Ditampilkan di post, balasan, dan DM. Pembuat post di balasannya diberi lencana Penulis.
 - **Enkripsi**: hanya di jalur jaringan (TLS). Isi pesan disimpan **plaintext**. Tidak ada enkripsi di level aplikasi. E2EE baru dievaluasi di v2.
 - **Waktu**: server mengirim `created_at` dibulatkan ke menit. Client yang memformat "x menit/jam/hari/bulan/tahun yang lalu" (functional spec §4.1).
 - **Tanpa follow graph dan fan-out.** Feed bersifat pull dari index bersama + cache pendek.
@@ -81,7 +81,9 @@ cd mobile && flutter analyze && flutter test
   `cd infra && docker compose --profile observability up -d` (Grafana :3000, Prometheus :9090, OTLP :4318; app dengan
   `SENYAP_OTLP_ENABLED=true`); metrik `/actuator/prometheus`; render manifest `kubectl kustomize infra/k8s/overlays/staging`
   (butuh `secrets.env` + `db-admin.env` di overlay, contoh di `infra/k8s/overlays/*.example.env`).
-- Login lokal: OTP mock, kode selalu `000000` (profil local/test), tidak ada SMS. Contoh:
+- **Profil**: gender (`male|female|unspecified`) + avatar emoji dari daftar tetap (bukan foto asli), tampil di post, balasan, DM. Kuota post 40/hari untuk semua akun.
+- **Login**: nomor HP + OTP, atau email + kata sandi (`/v1/auth/email/{register,login,forgot,reset}`, tanpa Bearer). Email disimpan plaintext (untuk reset) dan tidak pernah ada di respons/log.
+- Login lokal: OTP mock dan kode reset email, kode selalu `000000` (profil local/test), tidak ada SMS. Contoh:
   `curl -XPOST localhost:8180/v1/auth/otp -H 'Content-Type: application/json' -d '{"phone":"081200000001"}'`, lalu
   `POST /v1/auth/verify` dengan `{"phone","code":"000000","device":{"platform":"ios"},"age_confirmed":true}`.
 - Produksi wajib env `SENYAP_AUTH_PHONE_PEPPER` dan `SENYAP_AUTH_SIGNING_JWK` (buat dengan `GenerateSigningKey`),

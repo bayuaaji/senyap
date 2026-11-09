@@ -99,7 +99,7 @@ dan arsitekturnya tetap bisa dikembangkan melampaui angka ini.
 | NFR-13 | Pengiriman pesan | *At-least-once* dari jaringan, *exactly-once* di tampilan (deduplikasi lewat `client_msg_id`). |
 | NFR-14 | Availability | 99,9% untuk DM, 99,5% untuk feed |
 | NFR-15 | Durabilitas pesan | Pesan yang sudah di-ack server tidak boleh hilang (ditulis ke DB sebelum ack). |
-| NFR-16 | Keamanan transport | TLS 1.3 untuk semua koneksi client ↔ server dan TLS untuk koneksi internal. Data tersimpan tidak dienkripsi di level aplikasi (lihat §7). Nomor HP hanya disimpan sebagai HMAC (dengan pepper di KMS). |
+| NFR-16 | Keamanan transport | TLS 1.3 untuk semua koneksi client ↔ server dan TLS untuk koneksi internal. Data tersimpan tidak dienkripsi di level aplikasi (lihat §7). Nomor HP hanya disimpan sebagai HMAC (dengan pepper di KMS). **Pengecualian (keputusan 9 Nov 2026):** akun yang daftar dengan email + kata sandi menyimpan email **plaintext** (ternormalisasi) di schema `auth`, karena email dibutuhkan untuk mengirim kode reset kata sandi; kata sandi disimpan sebagai hash BCrypt. Trade-off: kebocoran DB `auth` membuka email (bukan nomor HP). Mitigasi: email tidak pernah ada di respons API, log, event, metrik, atau kunci Redis (rate limit memakai HMAC email), dan dihapus saat akun di-purge. |
 | NFR-17 | Pemisahan identitas | API tidak pernah mengembalikan user ID atau nomor HP. User lain hanya mengenal akun lewat alias dan `public_id` miliknya. Alias ditampilkan di post, balasan, dan DM. |
 | NFR-18 | Moderasi | Laporan prioritas tinggi (ancaman, eksploitasi anak) ditinjau < 1 jam. Laporan biasa < 24 jam. |
 | NFR-19 | Retensi data | Pesan DM disimpan selama percakapan aktif. Dihapus 30 hari setelah kedua pihak menghapus atau keluar. Log moderasi 1 tahun. |

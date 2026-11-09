@@ -1,8 +1,8 @@
 package app.senyap.safety.internal;
 
-import java.util.Arrays;
 import org.springframework.beans.factory.InitializingBean;
 import org.springframework.core.env.Environment;
+import org.springframework.core.env.Profiles;
 import org.springframework.stereotype.Component;
 
 /**
@@ -26,8 +26,9 @@ class SupportCardGuard implements InitializingBean {
 
     @Override
     public void afterPropertiesSet() {
-        boolean dev = Arrays.stream(env.getActiveProfiles()).anyMatch(p -> p.equals("local") || p.equals("test"));
-        if (dev) {
+        // acceptsProfiles juga memperhitungkan profil default (spring.profiles.default = local,api,worker),
+        // sedangkan getActiveProfiles() kosong bila profil tidak di-set eksplisit.
+        if (env.acceptsProfiles(Profiles.of("local | test"))) {
             return;
         }
         var s = props.support();

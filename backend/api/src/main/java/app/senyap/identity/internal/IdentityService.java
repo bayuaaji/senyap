@@ -6,6 +6,7 @@ import app.senyap.identity.AccountStatus;
 import app.senyap.identity.Sanction;
 import app.senyap.identity.TrustAdjustment;
 import app.senyap.identity.AccountSummary;
+import app.senyap.identity.Gender;
 import app.senyap.identity.IdentityApi;
 import app.senyap.identity.PublicIdentity;
 import app.senyap.identity.SignInResult;
@@ -38,8 +39,12 @@ class IdentityService implements IdentityApi, PrincipalResolver {
     private record Principal(long userId, AccountStatus status) {
     }
 
-    private record UserRow(long id, UUID publicId, AccountStatus status, boolean onboarded) {
+    private record UserRow(long id, UUID publicId, AccountStatus status, boolean onboarded, boolean purged) {
     }
+
+    private static final String USER_ROW = """
+            SELECT id, public_id, status, onboarded_at IS NOT NULL AS onboarded, purged_at IS NOT NULL AS purged
+            FROM users""";
 
     private final ModuleDatabase db;
     private final OutboxWriter outbox;
@@ -84,8 +89,42 @@ class IdentityService implements IdentityApi, PrincipalResolver {
         throw new IllegalStateException("Gagal membuat akun setelah beberapa percobaan");
     }
 
+    @Override
+    public SignInResult createAccount() {
+        for (int attempt = 0; attempt < AliasGenerator.MAX_TAG_TRIES; attempt++) {
+            try {
+                return register(null);
+            } catch (DuplicateKeyException e) {
+                // Alias bentrok dengan akun lain yang baru dibuat: acak ulang.
+            }
+        }
+        throw new IllegalStateException("Gagal membuat akun setelah beberapa percobaan");
+    }
+
+    @Override
+    public Optional<SignInResult> signInAccount(long userId) {
+        for (int attempt = 0; attempt < 3; attempt++) {
+            var found = db.jdbc().sql(USER_ROW + " WHERE id = :id").param("id", userId)
+                    .query(IdentityService::userRow).optional();
+            if (found.isEmpty() || found.get().purged()) {
+                return Optional.empty();
+            }
+            var u = found.get();
+            if (u.status() != AccountStatus.DELETED) {
+                return Optional.of(new SignInResult(u.id(), u.publicId(), u.status(), false, u.onboarded()));
+            }
+            var restored = restore(u);
+            if (restored.isPresent()) {
+                return Optional.of(new SignInResult(u.id(), u.publicId(), restored.get(), false, u.onboarded()));
+            }
+            // baru saja di-purge job worker di antara baca dan tulis: baca ulang
+        }
+        return Optional.empty();
+    }
+
+    /** @param phoneHmac null = akun tanpa nomor HP */
     private SignInResult register(byte[] phoneHmac) {
-        var alias = aliases.generate(null, null);
+        var alias = aliases.generate(Gender.UNSPECIFIED, null, null);
         long id = tsid.next();
         var publicId = UUID.randomUUID();
         var now = Timestamp.from(Instant.now());
@@ -95,7 +134,7 @@ class IdentityService implements IdentityApi, PrincipalResolver {
                                                alias_changed_at, age_confirmed_at, created_at)
                             VALUES (:id, :phone, :pub, :name, :tag, :color, :now, :now, :now)""")
                     .param("id", id).param("phone", phoneHmac).param("pub", publicId)
-                    .param("name", alias.name()).param("tag", alias.tag()).param("color", alias.color().hex())
+                    .param("name", alias.name()).param("tag", alias.tag()).param("color", alias.second().hex())
                     .param("now", now)
                     .update();
             AliasHistory.open(db, tsid, id, alias.name(), alias.tag(), now);
@@ -127,11 +166,13 @@ class IdentityService implements IdentityApi, PrincipalResolver {
     }
 
     private Optional<UserRow> findByPhone(byte[] phoneHmac) {
-        return db.jdbc().sql("SELECT id, public_id, status, onboarded_at IS NOT NULL AS onboarded FROM users WHERE phone_hmac = :p")
-                .param("p", phoneHmac)
-                .query((rs, n) -> new UserRow(rs.getLong("id"), rs.getObject("public_id", UUID.class),
-                        AccountStatus.valueOf(rs.getString("status")), rs.getBoolean("onboarded")))
-                .optional();
+        return db.jdbc().sql(USER_ROW + " WHERE phone_hmac = :p").param("p", phoneHmac)
+                .query(IdentityService::userRow).optional();
+    }
+
+    private static UserRow userRow(java.sql.ResultSet rs, int n) throws java.sql.SQLException {
+        return new UserRow(rs.getLong("id"), rs.getObject("public_id", UUID.class),
+                AccountStatus.valueOf(rs.getString("status")), rs.getBoolean("onboarded"), rs.getBoolean("purged"));
     }
 
     @Override
@@ -151,10 +192,14 @@ class IdentityService implements IdentityApi, PrincipalResolver {
         if (userIds.isEmpty()) {
             return Map.of();
         }
-        return db.jdbc().sql("SELECT id, public_id, alias_name, alias_tag, alias_color FROM users WHERE id IN (:ids)")
+        return db.jdbc().sql("""
+                        SELECT id, public_id, alias_name, alias_tag, alias_color, gender, avatar
+                        FROM users WHERE id IN (:ids)""")
                 .param("ids", List.copyOf(userIds))
                 .query((rs, n) -> Map.entry(rs.getLong("id"), new PublicIdentity(rs.getObject("public_id", UUID.class),
-                        rs.getString("alias_name"), rs.getString("alias_tag"), rs.getString("alias_color"))))
+                        rs.getString("alias_name"), rs.getString("alias_tag"), rs.getString("alias_color"),
+                        Gender.fromCode(rs.getString("gender")).orElse(Gender.UNSPECIFIED),
+                        AvatarCatalog.emoji(rs.getString("avatar")))))
                 .list().stream().collect(Collectors.toUnmodifiableMap(Map.Entry::getKey, Map.Entry::getValue));
     }
 
@@ -303,7 +348,7 @@ class IdentityService implements IdentityApi, PrincipalResolver {
                     return Map.entry(id, new AccountRecord(id, rs.getObject("public_id", UUID.class),
                             rs.getString("alias_name") + " #" + rs.getString("alias_tag"),
                             AccountStatus.valueOf(rs.getString("status")), rs.getInt("trust_score"),
-                            HexFormat.of().formatHex(rs.getBytes("phone_hmac")),
+                            rs.getBytes("phone_hmac") == null ? null : HexFormat.of().formatHex(rs.getBytes("phone_hmac")),
                             rs.getTimestamp("created_at").toInstant(), until == null ? null : until.toInstant(),
                             List.copyOf(history.getOrDefault(id, List.of()))));
                 })

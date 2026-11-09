@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../app/ui/ui.dart';
 import '../../core/api/api_error.dart';
 import '../../core/time/relative_time.dart';
 import '../safety/safety_actions.dart';
 import '../safety/safety_repository.dart';
+import '../profile/alias_avatar.dart';
 import '../whisper/whisper_entry.dart';
 import 'post_card.dart';
 import 'post_models.dart';
@@ -113,18 +115,15 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
   }
 
   Future<void> _deletePost() async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Hapus post?'),
-        content: const Text('Post dan balasannya tidak akan terlihat lagi.'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Batal')),
-          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Hapus')),
-        ],
-      ),
+    final ok = await showConfirm(
+      context,
+      icon: Icons.delete_outline_rounded,
+      title: 'Hapus cerita ini?',
+      message: 'Cerita dan semua balasannya tidak akan terlihat lagi oleh siapa pun.',
+      confirmLabel: 'Hapus',
+      destructive: true,
     );
-    if (ok != true) return;
+    if (!ok) return;
     try {
       await _repo.delete(widget.postId);
       if (mounted) Navigator.of(context).pop(true);
@@ -155,26 +154,37 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
 
   void _toast(Object e) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ApiError.from(e).message)));
+    showToast(context, ApiError.from(e).message, tone: ToastTone.error);
   }
 
   @override
   Widget build(BuildContext context) {
     final post = _post;
+    final c = context.colors;
     return Scaffold(
-      appBar: AppBar(title: const Text('Balasan')),
+      appBar: const SenyapBar(title: 'Cerita'),
       body: post == null
-          ? Center(child: _error == null ? const CircularProgressIndicator() : Text(_error!.message))
+          ? Center(
+              child: _error == null
+                  ? const Loader()
+                  : EmptyState(
+                      icon: Icons.cloud_off_rounded,
+                      title: 'Cerita tidak bisa dibuka',
+                      message: _error!.message,
+                    ),
+            )
           : Column(children: [
               Expanded(
                 child: RefreshIndicator(
                   onRefresh: _refresh,
                   child: ListView.builder(
+                    padding: const EdgeInsets.only(top: Space.sm, bottom: Space.xl),
                     itemCount: 2 + _replies.length + (_repliesDone ? 0 : 1),
                     itemBuilder: (context, i) {
                       if (i == 0) {
                         return PostCard(
                           post: post,
+                          heroTag: PostCard.heroTagFor(post.id),
                           onHeart: _toggleHeart,
                           onWhisper: () => openWhisper(context, type: WhisperOriginType.post, originId: post.id, excerpt: post.body),
                           onMore: post.isMine
@@ -184,12 +194,20 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
                         );
                       }
                       if (i == 1) {
+                        final empty = _replies.isEmpty && _repliesDone;
                         return Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-                          child: Text(
-                            _replies.isEmpty && _repliesDone ? 'Belum ada balasan.' : '${post.replyCount} balasan',
-                            style: Theme.of(context).textTheme.titleSmall,
-                          ),
+                          padding: const EdgeInsets.fromLTRB(Space.gutter, Space.xxl, Space.gutter, Space.xs),
+                          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                            Divider(color: c.line),
+                            const SizedBox(height: Space.lg),
+                            Text(empty ? 'Belum ada balasan.' : '${post.replyCount} balasan',
+                                style: context.text.headlineSmall),
+                            if (empty) ...[
+                              const SizedBox(height: Space.xxs),
+                              Text('Balasan pertama sering paling berarti untuk penulisnya.',
+                                  style: context.text.bodyMedium),
+                            ],
+                          ]),
                         );
                       }
                       final idx = i - 2;
@@ -197,10 +215,7 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
                         WidgetsBinding.instance.addPostFrameCallback((_) {
                           if (mounted) _loadReplies();
                         });
-                        return const Padding(
-                          padding: EdgeInsets.all(16),
-                          child: Center(child: CircularProgressIndicator()),
-                        );
+                        return const Padding(padding: EdgeInsets.all(Space.lg), child: Loader());
                       }
                       final reply = _replies[idx];
                       return ReplyTile(
@@ -213,31 +228,69 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
                   ),
                 ),
               ),
-              SafeArea(
-                top: false,
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 4, 4, 8),
-                  child: Row(children: [
-                    Expanded(
-                      child: TextField(
-                        key: const Key('reply-input'),
-                        controller: _input,
-                        maxLength: 500,
-                        minLines: 1,
-                        maxLines: 4,
-                        decoration: const InputDecoration(hintText: 'Tulis balasan…', counterText: ''),
-                      ),
-                    ),
-                    IconButton(
-                      key: const Key('reply-send'),
-                      tooltip: 'Kirim',
-                      onPressed: _sending ? null : _send,
-                      icon: const Icon(Icons.send),
-                    ),
-                  ]),
+              _ReplyComposer(controller: _input, sending: _sending, onSend: _send),
+            ]),
+    );
+  }
+}
+
+/// Kolom balasan: menempel di bawah dengan garis rambut; input `raised` + tombol kirim persegi.
+class _ReplyComposer extends StatelessWidget {
+  const _ReplyComposer({required this.controller, required this.sending, required this.onSend});
+
+  final TextEditingController controller;
+  final bool sending;
+  final VoidCallback onSend;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    return Container(
+      decoration: BoxDecoration(
+        color: c.bg,
+        border: Border(top: BorderSide(color: c.line, width: 0.6)),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(Space.md, Space.sm, Space.md, Space.sm),
+          child: Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
+            Expanded(
+              child: TextField(
+                key: const Key('reply-input'),
+                controller: controller,
+                maxLength: 500,
+                minLines: 1,
+                maxLines: 4,
+                textCapitalization: TextCapitalization.sentences,
+                style: context.text.bodyLarge,
+                decoration: const InputDecoration(
+                  hintText: 'Tulis balasan…',
+                  counterText: '',
+                  isDense: true,
+                  contentPadding: EdgeInsets.symmetric(horizontal: Space.md, vertical: 13),
                 ),
               ),
-            ]),
+            ),
+            const SizedBox(width: Space.xs),
+            ValueListenableBuilder(
+              valueListenable: controller,
+              builder: (context, value, _) {
+                final ready = value.text.trim().isNotEmpty && !sending;
+                return RoundIconButton(
+                  key: const Key('reply-send'),
+                  tooltip: 'Kirim balasan',
+                  size: 46,
+                  icon: Icons.arrow_upward_rounded,
+                  color: ready ? c.text : c.raised,
+                  iconColor: ready ? c.bg : c.textTertiary,
+                  onPressed: sending ? null : onSend,
+                );
+              },
+            ),
+          ]),
+        ),
+      ),
     );
   }
 }
@@ -260,47 +313,81 @@ class ReplyTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final c = context.colors;
+    PopupMenuItem<String> item(String value, IconData icon, String label, {bool danger = false}) => PopupMenuItem(
+          value: value,
+          child: Row(children: [
+            Icon(icon, size: 19, color: danger ? c.danger : c.textSecondary),
+            const SizedBox(width: Space.sm),
+            Text(label, style: TextStyle(color: danger ? c.danger : null)),
+          ]),
+        );
     final actions = <PopupMenuEntry<String>>[
-      if (reply.isMine) const PopupMenuItem(value: 'delete', child: Text('Hapus balasan')),
+      if (reply.isMine) item('delete', Icons.delete_outline_rounded, 'Hapus balasan', danger: true),
       if (viewerIsPostAuthor && !reply.isMine)
         reply.isHidden
-            ? const PopupMenuItem(value: 'unhide', child: Text('Tampilkan lagi'))
-            : const PopupMenuItem(value: 'hide', child: Text('Sembunyikan')),
+            ? item('unhide', Icons.visibility_outlined, 'Tampilkan lagi')
+            : item('hide', Icons.visibility_off_outlined, 'Sembunyikan'),
       if (!reply.isMine && reply.author.publicId != null) ...[
-        const PopupMenuItem(value: 'report', child: Text('Laporkan')),
-        const PopupMenuItem(value: 'block', child: Text('Blokir')),
+        item('report', Icons.flag_outlined, 'Laporkan'),
+        item('block', Icons.block_rounded, 'Blokir', danger: true),
       ],
     ];
-    return Opacity(
-      opacity: reply.isHidden ? 0.5 : 1,
-      child: ListTile(
-        leading: AuthorAvatar(author: reply.author, radius: 18),
-        title: Wrap(crossAxisAlignment: WrapCrossAlignment.center, spacing: 6, children: [
-          Text(reply.author.display, style: const TextStyle(fontWeight: FontWeight.w600)),
-          if (reply.author.isPostAuthor)
-            Container(
-              key: const Key('author-badge'),
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-              decoration: BoxDecoration(
-                color: theme.colorScheme.primaryContainer,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text('Penulis', style: TextStyle(fontSize: 11, color: theme.colorScheme.onPrimaryContainer)),
-            ),
-          if (reply.isHidden) const Text('· disembunyikan', style: TextStyle(fontSize: 12)),
-        ]),
-        subtitle: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const SizedBox(height: 2),
-          Text(reply.body, style: theme.textTheme.bodyMedium),
-          const SizedBox(height: 4),
-          RelativeTimeText(reply.createdAt, clock: clock, style: theme.textTheme.bodySmall),
-        ]),
-        trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-          if (reply.canWhisper && onWhisper != null)
-            IconButton(key: const Key('reply-whisper'), tooltip: 'Bisik', onPressed: onWhisper, icon: const Icon(Icons.lock_outline)),
+    return AnimatedOpacity(
+      duration: Motion.base,
+      opacity: reply.isHidden ? 0.45 : 1,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(Space.gutter, Space.lg, Space.xxs, Space.xs),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          AuthorAvatar(author: reply.author, radius: 16),
+          const SizedBox(width: Space.sm),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Wrap(crossAxisAlignment: WrapCrossAlignment.center, spacing: 6, runSpacing: 4, children: [
+                AliasName(text: reply.author.display, gender: reply.author.gender, style: context.text.titleSmall),
+                if (reply.author.isPostAuthor)
+                  Container(
+                    key: const Key('author-badge'),
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(color: c.accentSoft, borderRadius: Radii.all(Radii.sm - 2)),
+                    child: Text('Penulis',
+                        style: context.text.labelSmall?.copyWith(color: c.accent, fontWeight: FontWeight.w700)),
+                  ),
+                if (reply.isHidden)
+                  Text('· disembunyikan', style: context.text.bodySmall?.copyWith(color: c.textTertiary)),
+              ]),
+              const SizedBox(height: 2),
+              RelativeTimeText(reply.createdAt,
+                  clock: clock,
+                  style: context.text.bodySmall?.copyWith(color: c.textTertiary, fontWeight: FontWeight.w400)),
+              const SizedBox(height: Space.xs),
+              Text(reply.body, style: PostType.reply.copyWith(color: c.text)),
+              if (reply.canWhisper && onWhisper != null)
+                // Bisik ke penulis balasan: tombol teks beraksen di bawah isi, sejajar teks.
+                Transform.translate(
+                  offset: const Offset(-Space.xs, 0),
+                  child: TextButton.icon(
+                    key: const Key('reply-whisper'),
+                    style: TextButton.styleFrom(
+                      foregroundColor: c.accent,
+                      padding: const EdgeInsets.symmetric(horizontal: Space.xs),
+                    ),
+                    onPressed: onWhisper,
+                    icon: const Icon(Icons.lock_outline_rounded, size: 16),
+                    label: const Text('Bisik'),
+                  ),
+                )
+              else
+                const SizedBox(height: Space.xs),
+            ]),
+          ),
           if (actions.isNotEmpty && onAction != null)
-            PopupMenuButton<String>(onSelected: onAction, itemBuilder: (_) => actions),
+            PopupMenuButton<String>(
+              tooltip: 'Lainnya',
+              icon: Icon(Icons.more_horiz_rounded, size: 20, color: c.textTertiary),
+              onSelected: onAction,
+              itemBuilder: (_) => actions,
+            ),
         ]),
       ),
     );

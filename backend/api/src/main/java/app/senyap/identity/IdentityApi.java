@@ -2,6 +2,7 @@ package app.senyap.identity;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * API publik modul identity (aturan M3/M4: batch, DTO record, tanpa transaksi lintas modul).
@@ -16,11 +17,24 @@ public interface IdentityApi {
      */
     SignInResult signIn(String phoneHmacHex);
 
+    /**
+     * Membuat akun baru tanpa nomor HP (daftar dengan email + kata sandi; kredensialnya disimpan modul auth).
+     * Alias acak dari katalog {@code unspecified}, {@code age_confirmed_at = now}, event {@code user.registered}.
+     */
+    SignInResult createAccount();
+
+    /**
+     * Login ulang berdasarkan user ID (kredensial non-HP yang diverifikasi modul pemanggil). Akun {@code DELETED}
+     * yang belum di-purge dipulihkan seperti {@link #signIn}. Kosong bila user ID tidak dikenal atau akunnya sudah
+     * di-purge (modul pemanggil sebaiknya melupakan kredensialnya).
+     */
+    Optional<SignInResult> signInAccount(long userId);
+
     /** Status + public_id per user ID. User ID yang tidak dikenal tidak ada di map. */
     Map<Long, AccountSummary> findAccounts(List<Long> userIds);
 
     /**
-     * Identitas publik (public_id + alias) per user ID, untuk ditampilkan modul lain (post, balasan, DM).
+     * Identitas publik (public_id + alias + gender + avatar) per user ID, untuk ditampilkan modul lain (post, balasan, DM).
      * User ID yang tidak dikenal tidak ada di map. Akun {@code DELETED} tetap dikembalikan dengan alias
      * terakhirnya; modul pemanggil yang memutuskan cara menampilkannya.
      */

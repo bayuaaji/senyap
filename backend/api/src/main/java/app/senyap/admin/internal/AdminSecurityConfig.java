@@ -11,6 +11,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
 import org.springframework.core.env.Environment;
+import org.springframework.core.env.Profiles;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.GrantedAuthority;
@@ -52,7 +53,8 @@ class AdminSecurityConfig {
     SecurityFilterChain adminChain(HttpSecurity http, ObjectProvider<ClientRegistrationRepository> registrations,
                                    SecurityContextRepository contexts, AdminProperties props, Environment env)
             throws Exception {
-        boolean dev = Arrays.stream(env.getActiveProfiles()).anyMatch(p -> p.equals("local") || p.equals("test"));
+        // acceptsProfiles juga memperhitungkan profil default (getActiveProfiles() kosong tanpa profil eksplisit).
+        boolean dev = env.acceptsProfiles(Profiles.of("local | test"));
         if (props.devLogin() && !dev) {
             throw new IllegalStateException("senyap.admin.dev-login hanya boleh di profil local/test; pakai SSO (OIDC)");
         }

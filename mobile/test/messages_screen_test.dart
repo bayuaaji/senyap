@@ -14,7 +14,8 @@ Conversation conv(String id, String status, {required String role, String? body,
       'id': id,
       'status': status,
       'role': role,
-      'peer': {'public_id': 'p-$id', 'name': 'Rubah Biru', 'tag': '1234', 'color': '#1E88E5'},
+      'peer': {'public_id': 'p-$id', 'name': 'Rubah Biru', 'tag': '1234', 'color': '#1E88E5',
+          'gender': id == '1' ? 'male' : 'unspecified', 'avatar': id == '1' ? '🦊' : null},
       'origin': {'type': 'POST', 'id': '9', 'excerpt': 'Aku resign minggu depan'},
       'last_seq': 1,
       'last_message': body == null
@@ -65,6 +66,10 @@ void main() {
     expect(find.text('Permintaan tidak diterima'), findsOneWidget);
     expect(find.text('Boleh ngobrol?'), findsNothing);
     expect(find.byKey(const Key('requests-badge')), findsOneWidget);
+    // Avatar emoji + ikon gender hanya untuk peer yang mengisinya; lainnya inisial.
+    expect(find.text('🦊'), findsOneWidget);
+    expect(find.byKey(const Key('gender-male')), findsOneWidget);
+    expect(find.text('R'), findsNWidgets(2));
 
     await tester.tap(find.text('Permintaan'));
     await tester.pumpAndSettle();

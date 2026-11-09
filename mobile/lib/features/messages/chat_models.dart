@@ -5,12 +5,23 @@ library;
 import '../profile/profile_models.dart';
 
 class Person {
-  const Person({required this.name, required this.color, this.publicId, this.tag});
+  const Person({
+    required this.name,
+    required this.color,
+    this.publicId,
+    this.tag,
+    this.gender = Gender.unspecified,
+    this.avatar,
+  });
 
   final String? publicId;
   final String name;
   final String? tag;
   final String color;
+  final Gender gender;
+
+  /// Emoji avatar; `null` = inisial alias.
+  final String? avatar;
 
   String get label => tag == null ? name : '$name #$tag';
 
@@ -21,6 +32,8 @@ class Person {
         name: j['name'] as String? ?? '[dihapus]',
         tag: j['tag'] as String?,
         color: j['color'] as String? ?? '#9E9E9E',
+        gender: Gender.parse(j['gender']),
+        avatar: j['avatar'] as String?,
       );
 }
 

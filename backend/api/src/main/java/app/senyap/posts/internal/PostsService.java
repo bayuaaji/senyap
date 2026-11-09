@@ -103,7 +103,7 @@ class PostsService implements PostsApi {
         }
         AccountStanding standing = writer(userId);
         TextVerdict verdict = screen(ContentType.POST, body);
-        Quotas.daily(rateLimiter, "post", userId, standing, props.postsPerDay(), props.postsPerDayNewAccount(), "POST",
+        Quotas.daily(rateLimiter, "post", userId, standing, props.postsPerDay(), props.postsPerDay(), "POST",
                 "Kamu sudah mencapai batas post hari ini.");
         String visibility = initialVisibility(standing, verdict);
 
@@ -376,8 +376,8 @@ class PostsService implements PostsApi {
     }
 
     static PostView.Author author(PublicIdentity p) {
-        return p == null ? new PostView.Author(null, DELETED_NAME, null, null)
-                : new PostView.Author(p.publicId(), p.name(), p.tag(), p.color());
+        return p == null ? new PostView.Author(null, DELETED_NAME, null, null, null, null)
+                : new PostView.Author(p.publicId(), p.name(), p.tag(), p.color(), p.gender().code(), p.avatar());
     }
 
     /** functional spec §4: {@code created_at} dibulatkan ke menit. */

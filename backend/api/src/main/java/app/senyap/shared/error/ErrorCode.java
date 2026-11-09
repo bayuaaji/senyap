@@ -6,6 +6,10 @@ import org.springframework.http.HttpStatus;
 public enum ErrorCode {
     VALIDATION_FAILED(HttpStatus.BAD_REQUEST, "Data yang dikirim tidak valid."),
     OTP_INVALID(HttpStatus.BAD_REQUEST, "Kode salah atau sudah tidak berlaku."),
+    INVALID_EMAIL(HttpStatus.BAD_REQUEST, "Alamat email tidak valid."),
+    WEAK_PASSWORD(HttpStatus.BAD_REQUEST, "Kata sandi minimal 8 karakter."),
+    EMAIL_TAKEN(HttpStatus.CONFLICT, "Email ini sudah terdaftar. Silakan masuk."),
+    INVALID_CREDENTIALS(HttpStatus.UNAUTHORIZED, "Email atau kata sandi salah."),
     UNAUTHENTICATED(HttpStatus.UNAUTHORIZED, "Sesi kamu sudah berakhir. Silakan masuk lagi."),
     FORBIDDEN(HttpStatus.FORBIDDEN, "Kamu tidak punya akses ke sini."),
     NOT_FOUND(HttpStatus.NOT_FOUND, "Tidak ditemukan."),

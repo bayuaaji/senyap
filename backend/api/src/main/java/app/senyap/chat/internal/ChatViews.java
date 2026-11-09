@@ -24,13 +24,16 @@ final class ChatViews {
         return t == null ? null : t.truncatedTo(ChronoUnit.MINUTES);
     }
 
+    /** Lawan bicara: alias + gender + avatar (emoji atau null). */
     record Person(@JsonProperty("public_id") UUID publicId, @JsonProperty("name") String name,
-                  @JsonProperty("tag") String tag, @JsonProperty("color") String color) {
+                  @JsonProperty("tag") String tag, @JsonProperty("color") String color,
+                  @JsonProperty("gender") String gender, @JsonProperty("avatar") String avatar) {
 
-        static final Person DELETED = new Person(null, "[dihapus]", null, "#9E9E9E");
+        static final Person DELETED = new Person(null, "[dihapus]", null, "#9E9E9E", null, null);
 
         static Person of(PublicIdentity p) {
-            return p == null ? DELETED : new Person(p.publicId(), p.name(), p.tag(), p.color());
+            return p == null ? DELETED
+                    : new Person(p.publicId(), p.name(), p.tag(), p.color(), p.gender().code(), p.avatar());
         }
     }
 

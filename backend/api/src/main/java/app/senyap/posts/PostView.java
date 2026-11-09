@@ -33,9 +33,13 @@ public record PostView(
                 isMine, canWhisper, createdAt, Boolean.TRUE);
     }
 
-    /** Alias penulis. {@code publicId} null bila akun sudah di-purge (ditampilkan "[dihapus]"). */
+    /**
+     * Alias penulis + gender ({@code male}/{@code female}/{@code unspecified}) + avatar (emoji atau null).
+     * {@code publicId} null bila akun sudah di-purge (ditampilkan "[dihapus]", gender dan avatar null).
+     */
     public record Author(@JsonProperty("public_id") UUID publicId, @JsonProperty("name") String name,
-                         @JsonProperty("tag") String tag, @JsonProperty("color") String color) {
+                         @JsonProperty("tag") String tag, @JsonProperty("color") String color,
+                         @JsonProperty("gender") String gender, @JsonProperty("avatar") String avatar) {
     }
 
     public record BackgroundRef(@JsonProperty("url") String url, @JsonProperty("blurhash") String blurhash) {

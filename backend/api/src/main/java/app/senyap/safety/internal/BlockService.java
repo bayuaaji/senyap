@@ -29,6 +29,7 @@ class BlockService {
 
     record BlockView(@JsonProperty("id") String id, @JsonProperty("name") String name,
                      @JsonProperty("tag") String tag, @JsonProperty("color") String color,
+                     @JsonProperty("gender") String gender, @JsonProperty("avatar") String avatar,
                      @JsonProperty("created_at") Instant createdAt) {
     }
 
@@ -112,7 +113,8 @@ class BlockService {
         return rows.stream().map(r -> {
             var p = ids.get(r.blocked());
             return new BlockView(Tsid.toString(r.id()), p == null ? "[dihapus]" : p.name(), p == null ? null : p.tag(),
-                    p == null ? null : p.color(), r.at().truncatedTo(ChronoUnit.MINUTES));
+                    p == null ? null : p.color(), p == null ? null : p.gender().code(), p == null ? null : p.avatar(),
+                    r.at().truncatedTo(ChronoUnit.MINUTES));
         }).toList();
     }
 

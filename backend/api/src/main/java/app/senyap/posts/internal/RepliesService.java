@@ -31,6 +31,7 @@ class RepliesService {
 
     record ReplyAuthor(@JsonProperty("public_id") UUID publicId, @JsonProperty("name") String name,
                        @JsonProperty("tag") String tag, @JsonProperty("color") String color,
+                       @JsonProperty("gender") String gender, @JsonProperty("avatar") String avatar,
                        @JsonProperty("is_post_author") boolean isPostAuthor) {
     }
 
@@ -209,8 +210,9 @@ class RepliesService {
         boolean isPostAuthor = r.authorId() == postAuthor;
         PublicIdentity p = r.authorPurged() ? null : ids.get(r.authorId());
         var author = p == null
-                ? new ReplyAuthor(null, PostsService.DELETED_NAME, null, null, false)
-                : new ReplyAuthor(p.publicId(), p.name(), p.tag(), p.color(), isPostAuthor);
+                ? new ReplyAuthor(null, PostsService.DELETED_NAME, null, null, null, null, false)
+                : new ReplyAuthor(p.publicId(), p.name(), p.tag(), p.color(), p.gender().code(), p.avatar(),
+                        isPostAuthor);
         return new ReplyView(Tsid.toString(r.id()), Tsid.toString(r.postId()), author, r.body(),
                 PostsService.minute(r.createdAt()), mine, !mine && !r.authorPurged() && !r.hidden(), r.hidden(), null);
     }

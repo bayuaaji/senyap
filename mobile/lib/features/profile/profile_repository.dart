@@ -5,12 +5,18 @@ import '../../core/api/api_client.dart';
 import '../../core/api/api_error.dart';
 import 'profile_models.dart';
 
-/// `GET /v1/me/profile`, `POST /v1/me/alias/suggest`, `PUT /v1/me/alias`, `GET /v1/aliases/catalog`.
+/// `GET/PUT /v1/me/profile`, `POST /v1/me/alias/suggest`, `PUT /v1/me/alias`, `GET /v1/aliases/catalog`.
 abstract interface class ProfileRepository {
   Future<Profile> profile();
-  Future<AliasSuggestion> suggest({String? animal, String? color});
+
+  /// Saran alias sesuai gender user. [first]/[second] kosong = diacak server.
+  Future<AliasSuggestion> suggest({String? first, String? second});
   Future<Profile> useAlias(String suggestionToken);
-  Future<AliasCatalog> catalog();
+  Future<AliasCatalog> catalog(Gender gender);
+  Future<Profile> setGender(Gender gender);
+
+  /// [avatarId] `null` = hapus avatar (kembali ke inisial).
+  Future<Profile> setAvatar(String? avatarId);
 }
 
 final profileRepositoryProvider =
@@ -28,10 +34,10 @@ class DioProfileRepository implements ProfileRepository {
       });
 
   @override
-  Future<AliasSuggestion> suggest({String? animal, String? color}) => _call(() async {
+  Future<AliasSuggestion> suggest({String? first, String? second}) => _call(() async {
         final res = await _dio.post<Map<String, dynamic>>('/v1/me/alias/suggest', data: {
-          'animal': ?animal,
-          'color': ?color,
+          'first': ?first,
+          'second': ?second,
         });
         return AliasSuggestion.fromJson(res.data!);
       });
@@ -44,9 +50,21 @@ class DioProfileRepository implements ProfileRepository {
       });
 
   @override
-  Future<AliasCatalog> catalog() => _call(() async {
-        final res = await _dio.get<Map<String, dynamic>>('/v1/aliases/catalog');
+  Future<AliasCatalog> catalog(Gender gender) => _call(() async {
+        final res = await _dio.get<Map<String, dynamic>>('/v1/aliases/catalog',
+            queryParameters: {'gender': gender.wire});
         return AliasCatalog.fromJson(res.data!);
+      });
+
+  @override
+  Future<Profile> setGender(Gender gender) => _put({'gender': gender.wire});
+
+  @override
+  Future<Profile> setAvatar(String? avatarId) => _put({'avatar': avatarId});
+
+  Future<Profile> _put(Map<String, dynamic> body) => _call(() async {
+        final res = await _dio.put<Map<String, dynamic>>('/v1/me/profile', data: body);
+        return Profile.fromJson(res.data!);
       });
 
   Future<T> _call<T>(Future<T> Function() body) async {

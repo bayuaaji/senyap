@@ -10,7 +10,7 @@ void main() {
 
     for (final label in ['Feed', 'Tulis', 'Pesan', 'Notifikasi', 'Pengaturan']) {
       expect(
-        find.descendant(of: find.byType(NavigationBar), matching: find.text(label)),
+        find.descendant(of: find.byKey(const Key('app-nav')), matching: find.text(label)),
         findsOneWidget,
       );
     }
@@ -20,11 +20,11 @@ void main() {
   testWidgets('pindah tab ke Pesan lalu Pengaturan menampilkan alias', (tester) async {
     await pumpApp(tester, tokens: InMemoryTokenStore(testTokens));
 
-    await tester.tap(find.byIcon(Icons.chat_bubble_outline).last);
+    await tester.tap(find.byKey(const Key('nav-messages')));
     await tester.pumpAndSettle();
-    expect(find.text('Belum ada bisikan. Tekan Bisik di sebuah post untuk memulai.'), findsOneWidget);
+    expect(find.text('Belum ada bisikan'), findsOneWidget);
 
-    await tester.tap(find.byIcon(Icons.settings_outlined));
+    await tester.tap(find.byKey(const Key('nav-settings')));
     await tester.pumpAndSettle();
     expect(find.text('Kelinci Jingga #4821'), findsOneWidget);
   });
@@ -34,14 +34,17 @@ void main() {
     final auth = FakeAuthRepository();
     await pumpApp(tester, tokens: tokens, auth: auth);
 
-    await tester.tap(find.byIcon(Icons.settings_outlined));
+    await tester.tap(find.byKey(const Key('nav-settings')));
+    await tester.pumpAndSettle();
+    // Daftar pengaturan lebih lega sekarang: gulir sampai baris Keluar dibangun dan terlihat.
+    await tester.scrollUntilVisible(find.text('Keluar'), 200, scrollable: find.byType(Scrollable).first);
     await tester.pumpAndSettle();
     await tester.tap(find.text('Keluar'));
     await tester.pumpAndSettle();
 
     expect(auth.loggedOut, isTrue);
     expect(await tokens.read(), isNull);
-    expect(find.text('Selamat datang di Senyap'), findsOneWidget);
+    expect(find.byKey(const Key('welcome-register')), findsOneWidget);
   });
 
   testWidgets('hapus akun wajib mengetik HAPUS', (tester) async {
@@ -49,7 +52,7 @@ void main() {
     final auth = FakeAuthRepository();
     await pumpApp(tester, tokens: tokens, auth: auth);
 
-    await tester.tap(find.byIcon(Icons.settings_outlined));
+    await tester.tap(find.byKey(const Key('nav-settings')));
     await tester.pumpAndSettle();
     await tester.scrollUntilVisible(find.text('Hapus akun'), 100);
     await tester.drag(find.byType(ListView).last, const Offset(0, -200));
@@ -66,6 +69,6 @@ void main() {
 
     expect(auth.deleted, isTrue);
     expect(await tokens.read(), isNull);
-    expect(find.text('Selamat datang di Senyap'), findsOneWidget);
+    expect(find.byKey(const Key('welcome-register')), findsOneWidget);
   });
 }

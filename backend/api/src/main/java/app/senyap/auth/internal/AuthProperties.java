@@ -22,7 +22,8 @@ record AuthProperties(
         @DefaultValue("false") boolean ephemeralSigningKey,
         @DefaultValue("15m") Duration accessTokenTtl,
         @DefaultValue("90d") Duration refreshTokenTtl,
-        @DefaultValue Otp otp) {
+        @DefaultValue Otp otp,
+        @DefaultValue Email email) {
 
     /**
      * @param ttl              umur kode (spec: 5 menit)
@@ -40,5 +41,29 @@ record AuthProperties(
             @DefaultValue("30") int verifyPerIpPerHour,
             @DefaultValue("24h") Duration retention,
             @DefaultValue("000000") String mockCode) {
+    }
+
+    /**
+     * Login email + kata sandi. Kode reset memakai {@link OtpCodes} yang sama (tetap {@code 000000} hanya di
+     * profil local/test).
+     *
+     * @param resetTtl           umur kode reset (15 menit)
+     * @param resetMaxAttempts   percobaan per kode reset
+     * @param loginPerEmailPerHour / loginPerIpPerHour  percobaan login
+     * @param forgotPerEmailPerHour / forgotPerIpPerHour permintaan kode reset
+     * @param registerPerIpPerHour pendaftaran per IP
+     * @param resetPerIpPerHour  percobaan reset per IP (menahan tebak-kode lintas email)
+     * @param bcryptStrength     cost BCrypt
+     */
+    record Email(
+            @DefaultValue("15m") Duration resetTtl,
+            @DefaultValue("5") int resetMaxAttempts,
+            @DefaultValue("10") int loginPerEmailPerHour,
+            @DefaultValue("30") int loginPerIpPerHour,
+            @DefaultValue("3") int forgotPerEmailPerHour,
+            @DefaultValue("10") int forgotPerIpPerHour,
+            @DefaultValue("10") int registerPerIpPerHour,
+            @DefaultValue("30") int resetPerIpPerHour,
+            @DefaultValue("10") int bcryptStrength) {
     }
 }

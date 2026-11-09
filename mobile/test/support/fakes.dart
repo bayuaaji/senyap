@@ -23,10 +23,14 @@ import 'package:senyap/features/profile/profile_repository.dart';
 const testTokens = Tokens(accessToken: 'akses', refreshToken: 'segar');
 
 class FakeAuthRepository implements AuthRepository {
-  FakeAuthRepository({this.isNew = true});
+  FakeAuthRepository({this.isNew = true, Map<String, String>? accounts}) : accounts = accounts ?? {};
 
   final bool isNew;
   final requestedPhones = <String>[];
+
+  /// email → kata sandi.
+  final Map<String, String> accounts;
+  final forgotRequests = <String>[];
   var loggedOut = false;
   var deleted = false;
 
@@ -49,6 +53,37 @@ class FakeAuthRepository implements AuthRepository {
   }
 
   @override
+  Future<VerifyResult> registerEmail({required String email, required String password}) async {
+    if (accounts.containsKey(email)) {
+      throw const ApiError(code: 'EMAIL_TAKEN', message: 'Email sudah dipakai.', status: 409);
+    }
+    if (password.length < 8) {
+      throw const ApiError(code: 'WEAK_PASSWORD', message: 'Lemah.', status: 400);
+    }
+    accounts[email] = password;
+    return const VerifyResult(tokens: testTokens, isNew: true);
+  }
+
+  @override
+  Future<VerifyResult> loginEmail({required String email, required String password}) async {
+    if (accounts[email] != password) {
+      throw const ApiError(code: 'INVALID_CREDENTIALS', message: 'Salah.', status: 401);
+    }
+    return const VerifyResult(tokens: testTokens, isNew: false);
+  }
+
+  @override
+  Future<void> forgotPassword(String email) async => forgotRequests.add(email);
+
+  @override
+  Future<void> resetPassword({required String email, required String code, required String newPassword}) async {
+    if (code != '000000') {
+      throw const ApiError(code: 'RESET_CODE_INVALID', message: 'Kode reset salah.', status: 400);
+    }
+    accounts[email] = newPassword;
+  }
+
+  @override
   Future<void> logout() async => loggedOut = true;
 
   @override
@@ -56,34 +91,74 @@ class FakeAuthRepository implements AuthRepository {
 }
 
 class FakeProfileRepository implements ProfileRepository {
-  FakeProfileRepository({bool onboarded = true})
-    : _profile = _make('Kelinci Jingga', '4821', onboarded, null);
+  FakeProfileRepository({bool onboarded = true, Gender gender = Gender.unspecified, AvatarOption? avatar})
+    : _profile = _make('Kelinci Jingga', '4821', onboarded, null, gender, avatar);
 
   Profile _profile;
   var _suggestions = 0;
   final _tokens = <String, Alias>{};
+  final catalogRequests = <Gender>[];
+  final suggestRequests = <String>[];
+
+  Profile get current => _profile;
+
+  static const catalogs = {
+    Gender.male: AliasCatalog(
+      gender: Gender.male,
+      first: ['Harimau', 'Elang', 'Serigala'],
+      second: [AliasColorOption(name: 'Biru', hex: '#1E88E5'), AliasColorOption(name: 'Hijau', hex: '#43A047')],
+      avatars: [AvatarOption(id: 'm-singa', emoji: '🦁'), AvatarOption(id: 'm-elang', emoji: '🦅')],
+    ),
+    Gender.female: AliasCatalog(
+      gender: Gender.female,
+      first: ['Kucing', 'Merpati', 'Kupu-kupu'],
+      second: [AliasColorOption(name: 'Merah Muda', hex: '#EC407A'), AliasColorOption(name: 'Ungu', hex: '#8E24AA')],
+      avatars: [AvatarOption(id: 'f-kucing', emoji: '🐱'), AvatarOption(id: 'f-kupu', emoji: '🦋')],
+    ),
+    Gender.unspecified: AliasCatalog(
+      first: ['Kelinci', 'Rubah', 'Panda'],
+      second: [AliasColorOption(name: 'Biru', hex: '#1E88E5'), AliasColorOption(name: 'Jingga', hex: '#F28C38')],
+      avatars: [AvatarOption(id: 'u-panda', emoji: '🐼'), AvatarOption(id: 'u-rubah', emoji: '🦊')],
+    ),
+  };
 
   static Profile _make(
     String name,
     String tag,
     bool onboarded,
     DateTime? changeableAt,
+    Gender gender,
+    AvatarOption? avatar,
   ) => Profile(
     publicId: '3f9c0000-0000-4000-8000-000000000000',
     alias: Alias(name: name, tag: tag, color: '#F28C38'),
     onboarded: onboarded,
     aliasChangeableAt: changeableAt,
+    gender: gender,
+    avatar: avatar,
   );
+
+  Profile _copy({Alias? alias, bool? onboarded, DateTime? changeableAt, Gender? gender, AvatarOption? avatar,
+          bool clearAvatar = false}) =>
+      _make(
+        (alias ?? _profile.alias).name,
+        (alias ?? _profile.alias).tag,
+        onboarded ?? _profile.onboarded,
+        changeableAt ?? _profile.aliasChangeableAt,
+        gender ?? _profile.gender,
+        clearAvatar ? null : (avatar ?? _profile.avatar),
+      );
 
   @override
   Future<Profile> profile() async => _profile;
 
   @override
-  Future<AliasSuggestion> suggest({String? animal, String? color}) async {
+  Future<AliasSuggestion> suggest({String? first, String? second}) async {
     _suggestions++;
+    suggestRequests.add('${first ?? '*'}+${second ?? '*'}');
+    final words = catalogs[_profile.gender]!.first;
     final alias = Alias(
-      name:
-          '${animal ?? (_suggestions.isEven ? 'Rubah' : 'Panda')} ${color ?? 'Biru'}',
+      name: '${first ?? words[_suggestions % words.length]} ${second ?? 'Biru'}',
       tag: (1000 + _suggestions).toString(),
       color: '#1E88E5',
     );
@@ -95,18 +170,25 @@ class FakeProfileRepository implements ProfileRepository {
   @override
   Future<Profile> useAlias(String suggestionToken) async {
     final alias = _tokens.remove(suggestionToken)!;
-    _profile = _make(alias.name, alias.tag, true, DateTime.utc(2030, 1, 8));
+    _profile = _copy(alias: alias, onboarded: true, changeableAt: DateTime.utc(2030, 1, 8));
     return _profile;
   }
 
   @override
-  Future<AliasCatalog> catalog() async => const AliasCatalog(
-    animals: ['Kelinci', 'Rubah', 'Panda'],
-    colors: [
-      AliasColorOption(name: 'Biru', hex: '#1E88E5'),
-      AliasColorOption(name: 'Jingga', hex: '#F28C38'),
-    ],
-  );
+  Future<AliasCatalog> catalog(Gender gender) async {
+    catalogRequests.add(gender);
+    return catalogs[gender]!;
+  }
+
+  @override
+  Future<Profile> setGender(Gender gender) async => _profile = _copy(gender: gender);
+
+  @override
+  Future<Profile> setAvatar(String? avatarId) async {
+    if (avatarId == null) return _profile = _copy(clearAvatar: true);
+    final option = catalogs.values.expand((c) => c.avatars).firstWhere((a) => a.id == avatarId);
+    return _profile = _copy(avatar: option);
+  }
 }
 
 /// Inbox kosong.
@@ -167,6 +249,7 @@ Future<void> pumpApp(
   LocationService? location,
   BackgroundPicker? picker,
   SafetyRepository? safety,
+  ChatRepository? chat,
 }) async {
   await tester.pumpWidget(
     ProviderScope(
@@ -177,7 +260,7 @@ Future<void> pumpApp(
           profile ?? FakeProfileRepository(),
         ),
         // Bisik: tanpa WebSocket/SQLite nyata di widget test.
-        chatRepositoryProvider.overrideWithValue(EmptyChatRepository()),
+        chatRepositoryProvider.overrideWithValue(chat ?? EmptyChatRepository()),
         chatEngineProvider.overrideWithValue(null),
         postsRepositoryProvider.overrideWithValue(
           posts ?? FakePostsRepository(),

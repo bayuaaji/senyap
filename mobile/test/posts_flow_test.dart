@@ -78,11 +78,13 @@ void main() {
     expect(find.byKey(const Key('author-badge')), findsOneWidget);
     expect(find.text('3 jam yang lalu'), findsOneWidget);
 
+    await tester.ensureVisible(find.byKey(const Key('reply-whisper')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('reply-whisper')));
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('send-whisper')), findsOneWidget);
     expect(find.text('"Makasih semuanya."'), findsOneWidget);
-    await tester.pageBack();
+    await tester.tap(find.byKey(const Key('back')).last);
     await tester.pumpAndSettle();
 
     await tester.enterText(find.byKey(const Key('reply-input')), 'Semangat ya!');
@@ -97,7 +99,7 @@ void main() {
     final repo = FakePostsRepository();
     await pumpApp(tester, tokens: InMemoryTokenStore(testTokens), posts: repo);
 
-    await tester.tap(find.byIcon(Icons.edit_outlined));
+    await tester.tap(find.byKey(const Key('nav-compose')));
     await tester.pumpAndSettle();
     final submit = find.byKey(const Key('compose-submit'));
     expect(tester.widget<FilledButton>(submit).onPressed, isNull, reason: 'teks kosong');
@@ -107,13 +109,15 @@ void main() {
     await tester.pumpAndSettle();
     await tester.scrollUntilVisible(find.byKey(const Key('compose-location')), 200,
         scrollable: find.descendant(of: find.byKey(const Key('compose-list')), matching: find.byType(Scrollable)).first);
+    await tester.ensureVisible(find.byKey(const Key('compose-location')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('compose-location')));
     await tester.pumpAndSettle();
     await tester.tap(submit);
     await tester.pumpAndSettle();
 
     expect(repo.requests, contains('create:kerja:bg-kerja-1:qqw7xs'));
-    expect(find.text('Balasan'), findsOneWidget);
+    expect(find.text('Cerita'), findsOneWidget);
     expect(find.text('Hari ini aku berani bilang tidak.'), findsOneWidget);
     expect(find.text('Belum ada balasan.'), findsOneWidget);
   });
@@ -123,9 +127,11 @@ void main() {
     final repo = FakePostsRepository();
     await pumpApp(tester, tokens: InMemoryTokenStore(testTokens), posts: repo);
 
-    await tester.tap(find.byIcon(Icons.edit_outlined));
+    await tester.tap(find.byKey(const Key('nav-compose')));
     await tester.pumpAndSettle();
     await tester.enterText(find.byKey(const Key('compose-text')), 'Latar sendiri.');
+    await tester.ensureVisible(find.byKey(const Key('compose-upload')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('compose-upload')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('compose-submit')));

@@ -33,6 +33,15 @@ class PhoneHasher {
         return hmac("ip:" + ip);
     }
 
+    /** Hanya untuk kunci rate limit (kunci Redis tidak boleh berisi email mentah). */
+    byte[] email(String normalizedEmail) {
+        return hmac("email:" + normalizedEmail);
+    }
+
+    byte[] resetCode(long resetId, String code) {
+        return hmac("reset:" + resetId + ":" + code);
+    }
+
     byte[] otpCode(long attemptId, String code) {
         return hmac("otp:" + attemptId + ":" + code);
     }

@@ -85,9 +85,10 @@ class ProfileAliasIT extends IntegrationTest {
         assertThat(send("POST", "/v1/me/alias/suggest", "{\"color\":\"Pelangi\"}", token).statusCode()).isEqualTo(400);
 
         var catalog = json.readTree(send("GET", "/v1/aliases/catalog", null, token).body());
-        assertThat(catalog.get("animals").size()).isGreaterThanOrEqualTo(200);
-        assertThat(catalog.get("colors").size()).isEqualTo(20);
-        assertThat(catalog.get("colors").get(0).has("hex")).isTrue();
+        assertThat(catalog.get("gender").asString()).isEqualTo("unspecified");
+        assertThat(catalog.get("first").size()).isGreaterThanOrEqualTo(200);
+        assertThat(catalog.get("second").size()).isEqualTo(20);
+        assertThat(catalog.get("second").get(0).has("hex")).isTrue();
     }
 
     private String login() {

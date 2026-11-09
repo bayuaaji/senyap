@@ -17,6 +17,12 @@ senyap:
       # Semua request IT datang dari 127.0.0.1; batas per IP diuji lewat RateLimiter langsung.
       per-ip-per-hour: 100000
       verify-per-ip-per-hour: 100000
+    email:
+      login-per-ip-per-hour: 100000
+      forgot-per-ip-per-hour: 100000
+      register-per-ip-per-hour: 100000
+      reset-per-ip-per-hour: 100000
+      bcrypt-strength: 4
     datasource:
       password: test_auth_pw
   identity:

@@ -6,7 +6,8 @@ import 'package:senyap/features/posts/post_models.dart';
 import 'package:senyap/features/posts/posts_repository.dart';
 
 const authorA = Author(publicId: 'aaaa', name: 'Kelinci Jingga', tag: '4821', color: '#F28C38');
-const authorB = Author(publicId: 'bbbb', name: 'Rubah Biru', tag: '1203', color: '#1E88E5');
+const authorB = Author(
+    publicId: 'bbbb', name: 'Rubah Biru', tag: '1203', color: '#1E88E5', gender: Gender.female, avatar: '🦊');
 
 Post samplePost({String id = '101', bool mine = false, DateTime? createdAt}) => Post(
       id: id,
@@ -114,16 +115,36 @@ class FakePostsRepository implements PostsRepository {
   }
 }
 
+/// [results] dipakai berurutan (yang terakhir diulang). Default: selalu berhasil dengan `qqw7xs`.
 class FakeLocationService implements LocationService {
-  FakeLocationService({this.cell = 'qqw7xs'});
+  FakeLocationService({List<LocationResult>? results})
+      : results = results ?? const [LocationResult.ok('qqw7xs')];
 
-  final String? cell;
+  /// Hanya izin ditolak permanen / layanan mati / gagal, dsb.
+  FakeLocationService.failing(LocationStatus status) : results = [LocationResult(status)];
+
+  final List<LocationResult> results;
   var asked = 0;
+  var openedAppSettings = 0;
+  var openedLocationSettings = 0;
 
   @override
-  Future<String?> currentCell() async {
+  Future<LocationResult> currentCell() async {
+    final r = results[asked < results.length ? asked : results.length - 1];
     asked++;
-    return cell;
+    return r;
+  }
+
+  @override
+  Future<bool> openAppSettings() async {
+    openedAppSettings++;
+    return true;
+  }
+
+  @override
+  Future<bool> openLocationSettings() async {
+    openedLocationSettings++;
+    return true;
   }
 }
 

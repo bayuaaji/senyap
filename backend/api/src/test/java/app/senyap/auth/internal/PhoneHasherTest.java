@@ -9,7 +9,7 @@ import org.junit.jupiter.api.Test;
 class PhoneHasherTest {
 
     static AuthProperties props(String pepper) {
-        return new AuthProperties(pepper, null, true, null, null, null);
+        return new AuthProperties(pepper, null, true, null, null, null, null);
     }
 
     @Test

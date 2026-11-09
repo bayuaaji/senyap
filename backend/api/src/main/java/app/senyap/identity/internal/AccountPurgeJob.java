@@ -18,7 +18,8 @@ import org.springframework.stereotype.Component;
  * Purge akun {@code DELETED} setelah masa tenggang (functional spec FS-01: purge dalam 30 hari). Selama
  * masa tenggang, login ulang membatalkan penghapusan ({@code deleted_at} dikosongkan, jadi tidak terpilih di sini).
  * {@code phone_hmac} diganti byte acak (nomor HP tidak lagi terhubung, dan nomor itu bisa mendaftar
- * akun baru), {@code home_geohash} dihapus, lalu event {@code user.purged} diterbitkan. Modul pemilik
+ * akun baru; akun email tetap {@code null}, kredensial emailnya dihapus modul auth saat menerima
+ * {@code user.purged}), {@code home_geohash} dihapus, lalu event {@code user.purged} diterbitkan. Modul pemilik
  * konten (posts, chat) meng-anonimkan konten user itu menjadi "[dihapus]" saat menerima event tersebut
  * (consumer dibuat di Fase 2/3). Alias + {@code alias_history} dipertahankan untuk moderasi; alias lama
  * tidak dilepas supaya tidak bisa dipakai orang lain untuk menyamar.
@@ -68,7 +69,10 @@ class AccountPurgeJob {
             for (long id : ids) {
                 byte[] tombstone = new byte[32];
                 random.nextBytes(tombstone);
-                db.jdbc().sql("UPDATE users SET phone_hmac = :t, home_geohash = NULL, purged_at = now() WHERE id = :id")
+                db.jdbc().sql("""
+                                UPDATE users SET phone_hmac = CASE WHEN phone_hmac IS NULL THEN NULL ELSE :t END,
+                                                 home_geohash = NULL, purged_at = now()
+                                WHERE id = :id""")
                         .param("t", tombstone).param("id", id)
                         .update();
                 outbox.append("user.purged", Long.toString(id), Map.of("user_id", id));

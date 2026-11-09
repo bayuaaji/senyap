@@ -26,7 +26,15 @@ class AuthInterceptor extends QueuedInterceptor {
   final void Function() onSessionExpired;
 
   static const _retriedKey = 'senyap.retried';
-  static const publicPaths = {'/v1/auth/otp', '/v1/auth/verify', '/v1/auth/refresh'};
+  static const publicPaths = {
+    '/v1/auth/otp',
+    '/v1/auth/verify',
+    '/v1/auth/refresh',
+    '/v1/auth/email/register',
+    '/v1/auth/email/login',
+    '/v1/auth/email/forgot',
+    '/v1/auth/email/reset',
+  };
 
   @override
   Future<void> onRequest(RequestOptions options, RequestInterceptorHandler handler) async {

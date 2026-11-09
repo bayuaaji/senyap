@@ -21,7 +21,7 @@
       <tr><th>Alias</th><td th:text="${d.alias()}"></td></tr>
       <tr><th>Riwayat alias</th><td th:text="${#strings.listJoin(d.aliasHistory(), ', ')}"></td></tr>
       <tr><th>Status / trust</th><td th:text="${d.status()} + ' / ' + ${d.trustScore()}"></td></tr>
-      <tr><th>phone_hmac</th><td><code th:text="${d.phoneHmacHex()}"></code></td></tr>
+      <tr><th>phone_hmac</th><td><code th:text="${d.phoneHmacHex() ?: '— (akun email, tanpa nomor HP)'}"></code></td></tr>
       <tr><th>Terdaftar</th><td th:text="${#temporals.format(d.createdAt(), 'yyyy-MM-dd HH:mm', 'Asia/Jakarta')}"></td></tr>
     </table>
   </div>
